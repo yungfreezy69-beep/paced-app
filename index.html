@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+<!-- user-scalable=no / maximum-scale=1.0 notes:
+     1. Prevents iOS Safari from zooming on input-focus (triggered when input
+        font-size is below 16px — our search field is 15px).
+     2. iOS 10+ ignores user-scalable=no in regular Safari for accessibility,
+        so pinch-zoom still works in the browser. Standalone PWA mode may
+        respect it. Acceptable for a prototype/app preview context.
+     3. When Paced moves to React Native, this meta tag goes away entirely. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#E5E6E9">

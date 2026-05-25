@@ -48,6 +48,80 @@
   --tab-h:    calc(64px + env(safe-area-inset-bottom, 0px));
 }
 
+/* ── APP-LIKE TOUCH BEHAVIOR ──────────────────────────────────────────────── */
+/*
+   These rules eliminate browser-website behaviors that make the app feel like
+   a web page instead of a native app. The goal:
+     - No pinch-zoom or double-tap zoom (touch-action: manipulation)
+     - No tap flash (transparent tap highlight)
+     - No text selection on UI elements (user-select: none)
+     - No long-press callout menus on cards/buttons (-webkit-touch-callout)
+     - No SVG/image dragging (-webkit-user-drag)
+     - No rubber-band overscroll on the document (overscroll-behavior: none)
+   IMPORTANT: inputs, textareas, and contenteditable are fully restored below.
+*/
+
+/* Document-level app feel */
+html,
+body,
+.app-viewport {
+  overscroll-behavior: none;          /* no rubber-band bounce at scroll edges */
+  -webkit-text-size-adjust: 100%;     /* no auto text size change on rotation  */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;         /* removes double-tap-zoom delay;
+                                         keeps scroll + custom touch gestures   */
+}
+
+/* No text selection or long-press callout on UI chrome */
+button,
+a,
+.card,
+.card-inner,
+.tap,
+.tab,
+.cta,
+.sbar,
+.tabs,
+.area,
+.push,
+.fsmodal,
+.sheet,
+.handle {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Prevent dragging of decorative SVGs and images */
+svg {
+  -webkit-user-drag: none;
+  /* NOTE: do NOT set pointer-events: none globally on SVG —
+     Icon components (lucide SVGs inside buttons) rely on pointer events
+     being inherited from their parent. Only decorative SVGs need none.     */
+}
+img {
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+/* ── RESTORE FULL INPUT BEHAVIOR ──────────────────────────────────────────── */
+/*
+   Everything above is reversed for real text input elements.
+   This ensures:
+     - search field works normally
+     - workout name editing works normally
+     - keyboard opens normally
+     - text is selectable and copyable inside inputs
+*/
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+  touch-action: auto;                 /* allow zoom-on-focus, keyboard behavior */
+}
+
 /* ── ROOT — mobile first ──────────────────────────────────────────────────── */
 html {
   width: 100%;
