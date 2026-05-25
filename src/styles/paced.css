@@ -1,10 +1,11 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    Paced — Global Styles
-   Refactor: remove-phone-mockup-responsive-layout
+   Refactor: fix-iphone-full-width-layout
 
-   The fake phone shell (.shell, .screen, .island, .helper, .hi) is gone.
-   The app now lives directly in the browser viewport.
-   Safe-area CSS variables handle iPhone notch / Dynamic Island / home bar.
+   Mobile-first. The app fills the full iPhone screen.
+   Desktop preview is a separate concern handled at 700px+.
+   The 431px breakpoint was dangerously close to the largest iPhone widths
+   (430pt CSS pixels) and fired incorrectly in standalone PWA mode.
 ───────────────────────────────────────────────────────────────────────────── */
 
 * {
@@ -36,16 +37,10 @@
   /*
     Safe-area layout variables
     ------------------------------------------------------------------
-    --safe-top: status bar / Dynamic Island height on real devices.
-      iPhone 15/14 (Dynamic Island): env(safe-area-inset-top) ~59px
-      iPhone with notch:             env(safe-area-inset-top) ~44px
-      Desktop / env not supported:   0px → clamp to 44px minimum
-
-    --safe-bot: home indicator clearance.
-      Face ID iPhones: ~34px
-      Older / desktop: 0px
-
-    --tab-h: full tab-bar height including home-indicator clearance.
+    --safe-top : status bar / Dynamic Island height on real devices.
+                 Clamped to 44px minimum so desktop has breathing room.
+    --safe-bot : home indicator clearance (~34px on Face ID iPhones).
+    --tab-h    : full tab bar height including home-indicator clearance.
     ------------------------------------------------------------------
   */
   --safe-top: max(env(safe-area-inset-top, 0px), 44px);
@@ -53,30 +48,30 @@
   --tab-h:    calc(64px + env(safe-area-inset-bottom, 0px));
 }
 
-/* ── ROOT ─────────────────────────────────────────────────────────────────── */
-html, body {
-  font-family: var(--f-sys);
+/* ── ROOT — mobile first ──────────────────────────────────────────────────── */
+html {
+  width: 100%;
   height: 100%;
   overflow: hidden;
   background: #E5E6E9;
 }
-
-/* Desktop: dark surround — app floats centred without a fake phone frame */
-@media (min-width: 431px) {
-  body {
-    background: #0D0E11;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-  }
+body {
+  font-family: var(--f-sys);
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  /* iPhone/mobile default: match the app wallpaper colour — no gutters */
+  background: #E5E6E9;
 }
 
-/* ── APP VIEWPORT ─────────────────────────────────────────────────────────── */
+/* ── APP VIEWPORT — mobile default: full screen, no centering ─────────────── */
 .app-viewport {
   position: relative;
-  width: 100%;
-  max-width: 430px;
-  /* Height stack — last supported value wins */
+  width: 100vw;    /* explicit: never shrink below viewport width */
+  max-width: none; /* explicit: no max-width constraint on mobile  */
+  /* Height stack — last supported value wins:                     */
   height: 100vh;                    /* universal fallback          */
   height: -webkit-fill-available;   /* older iOS Safari            */
   height: 100dvh;                   /* iOS 15.4+ / modern browsers */
@@ -85,9 +80,34 @@ html, body {
   isolation: isolate;               /* new stacking context        */
 }
 
+/* ── DESKTOP PREVIEW — only applies at 700px+ ────────────────────────────── */
+/*
+   700px is safely above every iPhone CSS pixel width (max 430pt).
+   All iPhones, in any orientation, in both Safari and standalone PWA
+   mode, stay below this threshold and use the full-screen default above.
+   This only fires on proper desktop / laptop browser windows.
+*/
+@media (min-width: 700px) {
+  body {
+    background: #0D0E11;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  .app-viewport {
+    width: 430px;
+    max-width: 430px;
+    height: 100dvh;
+  }
+}
+
 /* ── STATUS BAR SPACER ────────────────────────────────────────────────────── */
-/* Silent safe-area spacer only — no "9:41", no icons. The real iOS status
-   bar is rendered by the device. On desktop this gives 44px breathing room. */
+/*
+   Silent safe-area spacer. No fake "9:41" or icons.
+   On iPhone: height = actual system status bar area (env(safe-area-inset-top)).
+   On desktop: height = 44px minimum for comfortable spacing.
+*/
 .sbar {
   height: var(--safe-top);
   flex-shrink: 0;
@@ -98,9 +118,9 @@ html, body {
 /* ── SCREEN AREA ──────────────────────────────────────────────────────────── */
 .area {
   position: absolute;
-  top: var(--safe-top);
+  top: var(--safe-top);   /* below system status bar  */
   left: 0; right: 0;
-  bottom: var(--tab-h);
+  bottom: var(--tab-h);   /* above tab bar            */
   overflow: hidden;
   z-index: 5;
 }
@@ -109,12 +129,10 @@ html, body {
 .scroll {
   height: 100%;
   overflow-y: auto; overflow-x: hidden;
-  /* .area already clears the tab bar; only a content breathing gap needed */
   padding-bottom: 32px;
   scrollbar-width: none;
 }
 .scroll::-webkit-scrollbar { display: none; }
-/* notab: sheets and modals with no tab bar below */
 .scroll.notab { padding-bottom: 28px; }
 
 /* ── TAB BAR ──────────────────────────────────────────────────────────────── */
@@ -209,7 +227,7 @@ html, body {
 .sheet {
   position: absolute;
   left: 0; right: 0; bottom: 0;
-  top: var(--safe-top);   /* can't cover the system status bar */
+  top: var(--safe-top);
   background: #E5E6E9;
   border-radius: 16px 16px 0 0;
   z-index: 90;
@@ -231,7 +249,7 @@ html, body {
   position: absolute; inset: 0;
   background: var(--d-bg);
   z-index: 110;
-  border-radius: 0;   /* was 50px for the fake phone corner — device provides corners now */
+  border-radius: 0;
   transform: translateY(100%);
   transition: transform 0.40s cubic-bezier(0.32, 0.72, 0, 1);
   overflow: hidden;
