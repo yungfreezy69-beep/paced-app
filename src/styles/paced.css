@@ -1,13 +1,20 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    Paced — Global Styles
-   Extracted from index.html during refactor step: extract-styles-and-catalog-data
+   Refactor: remove-phone-mockup-responsive-layout
 
-   Do not edit inline tokens here without updating the design system.
-   Future: these tokens will feed into a proper design system file.
+   The fake phone shell (.shell, .screen, .island, .helper, .hi) is gone.
+   The app now lives directly in the browser viewport.
+   Safe-area CSS variables handle iPhone notch / Dynamic Island / home bar.
 ───────────────────────────────────────────────────────────────────────────── */
 
-* { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; box-sizing: border-box; margin: 0; padding: 0; }
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+  margin: 0; padding: 0;
+}
 
+/* ── DESIGN TOKENS ────────────────────────────────────────────────────────── */
 :root {
   --white:      #FFFFFF;
   --bg:         #F8F8FA;
@@ -25,97 +32,111 @@
   --d-line:     rgba(255,255,255,0.07);
   --f-os:       'Oswald', 'Arial Narrow', sans-serif;
   --f-sys:      -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+
+  /*
+    Safe-area layout variables
+    ------------------------------------------------------------------
+    --safe-top: status bar / Dynamic Island height on real devices.
+      iPhone 15/14 (Dynamic Island): env(safe-area-inset-top) ~59px
+      iPhone with notch:             env(safe-area-inset-top) ~44px
+      Desktop / env not supported:   0px → clamp to 44px minimum
+
+    --safe-bot: home indicator clearance.
+      Face ID iPhones: ~34px
+      Older / desktop: 0px
+
+    --tab-h: full tab-bar height including home-indicator clearance.
+    ------------------------------------------------------------------
+  */
+  --safe-top: max(env(safe-area-inset-top, 0px), 44px);
+  --safe-bot: env(safe-area-inset-bottom, 0px);
+  --tab-h:    calc(64px + env(safe-area-inset-bottom, 0px));
 }
 
+/* ── ROOT ─────────────────────────────────────────────────────────────────── */
 html, body {
   font-family: var(--f-sys);
-  background: #111114;
-  height: 100%; overflow: hidden;
-}
-body {
-  display: flex; align-items: center; justify-content: center;
-  min-height: 100vh;
-  background: radial-gradient(ellipse at center, #1e1e22, #0e0e11);
-  padding: 24px;
+  height: 100%;
+  overflow: hidden;
+  background: #E5E6E9;
 }
 
-.helper {
-  position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
-  font-family: var(--f-os); font-size: 11px; font-weight: 500;
-  letter-spacing: 0.3em; text-transform: uppercase;
-  color: rgba(255,255,255,0.28); pointer-events: none;
+/* Desktop: dark surround — app floats centred without a fake phone frame */
+@media (min-width: 431px) {
+  body {
+    background: #0D0E11;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
 }
 
-/* PHONE */
-.shell {
-  width: 393px; height: 852px;
-  border-radius: 56px; background: #080809; padding: 7px;
-  box-shadow:
-    0 0 0 1.5px #28282c,
-    inset 0 0 0 1px rgba(255,255,255,0.04),
-    0 60px 140px -30px rgba(0,0,0,0.8);
-  flex-shrink: 0;
-}
-.screen {
-  width: 100%; height: 100%;
-  border-radius: 50px; overflow: hidden;
-  background: #E5E6E9; position: relative;
+/* ── APP VIEWPORT ─────────────────────────────────────────────────────────── */
+.app-viewport {
+  position: relative;
+  width: 100%;
+  max-width: 430px;
+  /* Height stack — last supported value wins */
+  height: 100vh;                    /* universal fallback          */
+  height: -webkit-fill-available;   /* older iOS Safari            */
+  height: 100dvh;                   /* iOS 15.4+ / modern browsers */
+  background: #E5E6E9;
+  overflow: hidden;
+  isolation: isolate;               /* new stacking context        */
 }
 
-/* Dynamic Island */
-.island {
-  position: absolute; top: 11px; left: 50%; transform: translateX(-50%);
-  width: 122px; height: 36px; background: #000;
-  border-radius: 20px; z-index: 100; pointer-events: none;
-}
-
-/* STATUS BAR */
+/* ── STATUS BAR SPACER ────────────────────────────────────────────────────── */
+/* Silent safe-area spacer only — no "9:41", no icons. The real iOS status
+   bar is rendered by the device. On desktop this gives 44px breathing room. */
 .sbar {
-  height: 54px; padding: 18px 34px 0;
-  display: flex; justify-content: space-between; align-items: center;
-  font-size: 16px; font-weight: 600; color: var(--ink);
-  pointer-events: none; position: relative; z-index: 10;
-  font-family: var(--f-sys);
+  height: var(--safe-top);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
 }
-.sbar.dark { color: #fff; }
-.sbar-icons { display: flex; gap: 5px; align-items: center; }
 
-/* HOME INDICATOR */
-.hi {
-  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
-  width: 134px; height: 5px; border-radius: 3px;
-  background: var(--ink); opacity: 0.8; z-index: 50;
-}
-.hi.dark { background: #fff; opacity: 0.55; }
-
-/* SCREEN AREA */
+/* ── SCREEN AREA ──────────────────────────────────────────────────────────── */
 .area {
-  position: absolute; top: 54px; left: 0; right: 0; bottom: 0;
-  overflow: hidden; z-index: 5;
+  position: absolute;
+  top: var(--safe-top);
+  left: 0; right: 0;
+  bottom: var(--tab-h);
+  overflow: hidden;
+  z-index: 5;
 }
 
-/* SCROLL */
+/* ── SCROLL ───────────────────────────────────────────────────────────────── */
 .scroll {
-  height: 100%; overflow-y: auto; overflow-x: hidden;
-  padding-bottom: 100px; scrollbar-width: none;
+  height: 100%;
+  overflow-y: auto; overflow-x: hidden;
+  /* .area already clears the tab bar; only a content breathing gap needed */
+  padding-bottom: 32px;
+  scrollbar-width: none;
 }
 .scroll::-webkit-scrollbar { display: none; }
+/* notab: sheets and modals with no tab bar below */
 .scroll.notab { padding-bottom: 28px; }
-.shell *::-webkit-scrollbar { display: none; }
 
-/* TAB BAR */
+/* ── TAB BAR ──────────────────────────────────────────────────────────────── */
 .tabs {
-  position: absolute; bottom: 0; left: 0; right: 0; height: 84px;
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: var(--tab-h);
   background: rgba(229,230,233,0.88);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
   border-top: 1px solid rgba(10,10,15,0.07);
-  display: flex; align-items: flex-start; justify-content: space-around;
-  padding-top: 10px; z-index: 40;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-around;
+  padding-top: 10px;
+  padding-bottom: var(--safe-bot);
+  z-index: 40;
 }
 .tab {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 4px 20px; cursor: pointer; user-select: none;
+  padding: 4px 20px;
+  cursor: pointer; user-select: none;
   color: var(--ink3);
   transition: color 0.18s ease;
   -webkit-tap-highlight-color: transparent;
@@ -127,7 +148,7 @@ body {
   letter-spacing: 0.14em; text-transform: uppercase;
 }
 
-/* CARDS */
+/* ── CARDS ────────────────────────────────────────────────────────────────── */
 .card {
   background: var(--white);
   border-radius: 18px;
@@ -139,7 +160,7 @@ body {
   box-shadow: 0 1px 8px rgba(10,10,15,0.06);
 }
 
-/* PILL */
+/* ── PILL ─────────────────────────────────────────────────────────────────── */
 .pill {
   display: inline-flex; align-items: center;
   padding: 4px 10px;
@@ -151,15 +172,14 @@ body {
   white-space: nowrap;
 }
 
-/* CTA */
+/* ── CTA ──────────────────────────────────────────────────────────────────── */
 .cta {
   display: flex; align-items: center; justify-content: center;
   width: 100%; height: 58px;
   background: var(--ink); color: #fff;
   border-radius: 30px; border: none;
   font-family: var(--f-os); font-size: 18px;
-  font-weight: 600; letter-spacing: 0.2em;
-  text-transform: uppercase;
+  font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;
   cursor: pointer;
   box-shadow: 0 8px 28px rgba(10,10,15,0.3);
   transition: transform 0.12s ease, opacity 0.12s ease;
@@ -167,7 +187,7 @@ body {
 }
 .cta:active { transform: scale(0.985); opacity: 0.93; }
 
-/* STREAK GRID */
+/* ── STREAK GRID ──────────────────────────────────────────────────────────── */
 .grid-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
 .grid-cell {
   height: 34px; border-radius: 8px;
@@ -176,16 +196,20 @@ body {
   transition: transform 0.12s ease;
 }
 
-/* SHEETS */
+/* ── BACKDROP ─────────────────────────────────────────────────────────────── */
 .backdrop {
-  position: absolute; inset: 0; background: rgba(0,0,0,0.5);
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.5);
   z-index: 80; opacity: 0; pointer-events: none;
   transition: opacity 0.28s ease;
 }
 .backdrop.on { opacity: 1; pointer-events: auto; }
 
+/* ── BOTTOM SHEETS ────────────────────────────────────────────────────────── */
 .sheet {
-  position: absolute; left: 0; right: 0; bottom: 0; top: 56px;
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  top: var(--safe-top);   /* can't cover the system status bar */
   background: #E5E6E9;
   border-radius: 16px 16px 0 0;
   z-index: 90;
@@ -196,23 +220,28 @@ body {
 }
 .sheet.on { transform: translateY(0); }
 .handle {
-  width: 36px; height: 5px; background: var(--ink4);
-  border-radius: 3px; margin: 8px auto 0;
+  width: 36px; height: 5px;
+  background: var(--ink4);
+  border-radius: 3px;
+  margin: 8px auto 0;
 }
 
-/* FULL SCREEN */
+/* ── FULL-SCREEN MODAL (Active Workout) ───────────────────────────────────── */
 .fsmodal {
-  position: absolute; inset: 0; background: var(--d-bg);
-  z-index: 110; border-radius: 50px;
+  position: absolute; inset: 0;
+  background: var(--d-bg);
+  z-index: 110;
+  border-radius: 0;   /* was 50px for the fake phone corner — device provides corners now */
   transform: translateY(100%);
   transition: transform 0.40s cubic-bezier(0.32, 0.72, 0, 1);
   overflow: hidden;
 }
 .fsmodal.on { transform: translateY(0); }
 
-/* PUSH */
+/* ── PUSH VIEWS ───────────────────────────────────────────────────────────── */
 .push {
-  position: absolute; inset: 0; background: #E5E6E9;
+  position: absolute; inset: 0;
+  background: #E5E6E9;
   z-index: 70;
   transform: translateX(100%);
   transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
@@ -220,32 +249,38 @@ body {
 }
 .push.on { transform: translateX(0); }
 
-/* EXPAND */
+/* ── EXPAND ───────────────────────────────────────────────────────────────── */
 .expand {
   overflow: hidden;
-  transition: max-height 0.38s cubic-bezier(0.32,0.72,0,1),
-              opacity 0.28s ease;
+  transition: max-height 0.38s cubic-bezier(0.32,0.72,0,1), opacity 0.28s ease;
 }
 
-/* TAP */
-.tap { transition: transform 0.12s ease, opacity 0.12s ease; -webkit-tap-highlight-color: transparent; cursor: pointer; }
+/* ── TAP FEEDBACK ─────────────────────────────────────────────────────────── */
+.tap {
+  transition: transform 0.12s ease, opacity 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
 .tap:active { transform: scale(0.97); opacity: 0.9; }
 
-/* CARD POOF — delete animation */
+/* ── CARD POOF ────────────────────────────────────────────────────────────── */
 @keyframes card-poof {
   0%   { transform: scale(1);    opacity: 1; }
   28%  { transform: scale(1.05); opacity: 1; }
   100% { transform: scale(0.55); opacity: 0; }
 }
-.card-poof { animation: card-poof 0.27s cubic-bezier(0.4,0,0.2,1) forwards; pointer-events: none; }
+.card-poof {
+  animation: card-poof 0.27s cubic-bezier(0.4,0,0.2,1) forwards;
+  pointer-events: none;
+}
 
-/* DARK EXERCISE ICON */
+/* ── DARK EXERCISE ICON ───────────────────────────────────────────────────── */
 .ex-icon {
   width: 44px; height: 44px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
-.ex-icon.done { background: #fff; }
+.ex-icon.done    { background: #fff; }
 .ex-icon.pending { background: var(--d-surf); border: 2px solid rgba(255,255,255,0.12); border-radius: 10px; width: 44px; height: 44px; }
-.ex-icon.active { background: var(--d-surf); }
-.ex-icon.timed  { background: var(--d-surf); }
+.ex-icon.active  { background: var(--d-surf); }
+.ex-icon.timed   { background: var(--d-surf); }

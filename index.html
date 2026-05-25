@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#E5E6E9">
 <title>Paced</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,13 +22,10 @@
 </head>
 
 <body>
-<div class="helper">Paced · Prototype</div>
-<div class="shell">
-  <div class="screen">
-    <div class="island"></div>
+<div class="app-viewport">
 
-    <!-- Topographic wallpaper — paper-cut contour layers -->
-    <svg style="position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none"
+  <!-- Topographic wallpaper — paper-cut contour layers, behind the React app -->
+  <svg style="position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none"
          viewBox="0 0 393 852" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
       <defs>
         <filter id="pc" x="-30%" y="-30%" width="160%" height="160%">
@@ -68,10 +68,9 @@
       <path d="M -10 -10 L 110 -10 C 120 17 107 60 86 84 C 65 108 34 96 12 139 C 4 155 -10 160 -10 148 Z"
             fill="#F4F4F7" filter="url(#pcs)"/>
 
-    </svg>
+  </svg>
 
-    <div id="root"></div>
-  </div>
+  <div id="root"></div>
 </div>
 
 <script src="src/data/exerciseCatalog.js"></script>
@@ -848,7 +847,7 @@ const CatalogScreen = ({ open, mode, title, excludeNames = [], workoutName = "",
 
       {/* Inner column. zIndex:1 floats over the SVG wallpaper. */}
       <div style={{
-        position:"absolute", top:54, left:0, right:0, bottom:0,
+        position:"absolute", top:"var(--safe-top)", left:0, right:0, bottom:0,
         display:"flex", flexDirection:"column", zIndex:1,
       }}>
 
@@ -1051,16 +1050,9 @@ const fmtVol = (b) => {
 };
 
 /* ── STATUS BAR ── */
-const SBar = ({dark=false}) => (
-  <div className={`sbar ${dark?"dark":""}`}>
-    <span>9:41</span>
-    <div className="sbar-icons">
-      <Icon name="Signal" size={15} sw={2.5}/>
-      <Icon name="Wifi" size={15} sw={2.5}/>
-      <Icon name="BatteryFull" size={22} sw={2}/>
-    </div>
-  </div>
-);
+/* SBar is now a silent safe-area spacer. The real iOS status bar is
+   shown by the device. On desktop, this provides 44px of breathing room. */
+const SBar = () => <div className="sbar"/>;
 
 /* ── STREAK CALENDAR WIDGET ── */
 // Renders exactly like streaks.jpg: big number, context, month grid
@@ -2771,7 +2763,7 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
       </svg>
 
       <SBar/>
-      <div style={{ position:"absolute", top:54, left:0, right:0, bottom:0, zIndex:1 }}>
+      <div style={{ position:"absolute", top:"var(--safe-top)", left:0, right:0, bottom:0, zIndex:1 }}>
 
         <div style={{ padding:"10px 20px 0" }}>
           <button onClick={onClose} className="tap" style={{ display:"flex", alignItems:"center", gap:3, background:"none", border:"none", cursor:"pointer" }}>
@@ -3132,8 +3124,8 @@ const ActiveWorkout = ({ open, workout, onClose, customNames = {}, customItems =
 
   return (
     <div className={`fsmodal ${open?"on":""}`}>
-      <SBar dark/>
-      <div style={{ position:"absolute", top:54, left:0, right:0, bottom:0 }}>
+      <SBar/>
+      <div style={{ position:"absolute", top:"var(--safe-top)", left:0, right:0, bottom:0 }}>
 
         {/* Top bar */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 24px 0" }}>
@@ -3342,7 +3334,6 @@ const Tabs = ({ active, onChange }) => (
         <span>{label}</span>
       </div>
     ))}
-    <div className="hi"/>
   </div>
 );
 
