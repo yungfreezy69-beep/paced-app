@@ -1,11 +1,6 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    Paced — Global Styles
-   Refactor: fix-iphone-full-width-layout
-
-   Mobile-first. The app fills the full iPhone screen.
-   Desktop preview is a separate concern handled at 700px+.
-   The 431px breakpoint was dangerously close to the largest iPhone widths
-   (430pt CSS pixels) and fired incorrectly in standalone PWA mode.
+   repair-iphone-scale-catalog-and-detail-ux
 ───────────────────────────────────────────────────────────────────────────── */
 
 * {
@@ -17,109 +12,34 @@
 
 /* ── DESIGN TOKENS ────────────────────────────────────────────────────────── */
 :root {
-  --white:      #FFFFFF;
-  --bg:         #F8F8FA;
-  --ink:        #0A0A0F;
-  --ink2:       #58595F;
-  --ink3:       #9B9DA6;
-  --ink4:       #C8CAD2;
-  --blue:       #2F6FED;
-  --blue-lt:    rgba(47,111,237,0.12);
-  --blue-md:    rgba(47,111,237,0.55);
-  --line:       rgba(10,10,15,0.08);
-  --missed:     #D94040;
-  --d-bg:       #0A0A0E;
-  --d-surf:     #161618;
-  --d-line:     rgba(255,255,255,0.07);
-  --f-os:       'Oswald', 'Arial Narrow', sans-serif;
-  --f-sys:      -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  --white:   #FFFFFF;
+  --bg:      #F8F8FA;
+  --ink:     #0A0A0F;
+  --ink2:    #58595F;
+  --ink3:    #9B9DA6;
+  --ink4:    #C8CAD2;
+  --blue:    #2F6FED;
+  --blue-lt: rgba(47,111,237,0.12);
+  --blue-md: rgba(47,111,237,0.55);
+  --line:    rgba(10,10,15,0.08);
+  --missed:  #D94040;
+  --d-bg:    #0A0A0E;
+  --d-surf:  #161618;
+  --d-line:  rgba(255,255,255,0.07);
+  --f-os:    'Oswald', 'Arial Narrow', sans-serif;
+  --f-sys:   -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
 
   /*
-    Safe-area layout variables
-    ------------------------------------------------------------------
-    --safe-top : status bar / Dynamic Island height on real devices.
-                 Clamped to 44px minimum so desktop has breathing room.
-    --safe-bot : home indicator clearance (~34px on Face ID iPhones).
-    --tab-h    : full tab bar height including home-indicator clearance.
-    ------------------------------------------------------------------
+    SAFE AREA VARS — mobile-first. No artificial minimums on iPhone.
+    --safe-top: real device status bar / DI height.
+      iPhone 15 (DI): ~59px  |  iPhone 14: ~47px  |  iPhone SE: ~20px
+      Desktop: 0px → we override to 44px in the 700px media query below.
+    --safe-bot: home indicator height (~34px Face ID, 0 older/desktop).
+    --tab-h:    tab bar total height including home indicator.
   */
-  --safe-top: max(env(safe-area-inset-top, 0px), 44px);
+  --safe-top: env(safe-area-inset-top, 0px);
   --safe-bot: env(safe-area-inset-bottom, 0px);
-  --tab-h:    calc(64px + env(safe-area-inset-bottom, 0px));
-}
-
-/* ── APP-LIKE TOUCH BEHAVIOR ──────────────────────────────────────────────── */
-/*
-   These rules eliminate browser-website behaviors that make the app feel like
-   a web page instead of a native app. The goal:
-     - No pinch-zoom or double-tap zoom (touch-action: manipulation)
-     - No tap flash (transparent tap highlight)
-     - No text selection on UI elements (user-select: none)
-     - No long-press callout menus on cards/buttons (-webkit-touch-callout)
-     - No SVG/image dragging (-webkit-user-drag)
-     - No rubber-band overscroll on the document (overscroll-behavior: none)
-   IMPORTANT: inputs, textareas, and contenteditable are fully restored below.
-*/
-
-/* Document-level app feel */
-html,
-body,
-.app-viewport {
-  overscroll-behavior: none;          /* no rubber-band bounce at scroll edges */
-  -webkit-text-size-adjust: 100%;     /* no auto text size change on rotation  */
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;         /* removes double-tap-zoom delay;
-                                         keeps scroll + custom touch gestures   */
-}
-
-/* No text selection or long-press callout on UI chrome */
-button,
-a,
-.card,
-.card-inner,
-.tap,
-.tab,
-.cta,
-.sbar,
-.tabs,
-.area,
-.push,
-.fsmodal,
-.sheet,
-.handle {
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-}
-
-/* Prevent dragging of decorative SVGs and images */
-svg {
-  -webkit-user-drag: none;
-  /* NOTE: do NOT set pointer-events: none globally on SVG —
-     Icon components (lucide SVGs inside buttons) rely on pointer events
-     being inherited from their parent. Only decorative SVGs need none.     */
-}
-img {
-  -webkit-user-drag: none;
-  pointer-events: none;
-}
-
-/* ── RESTORE FULL INPUT BEHAVIOR ──────────────────────────────────────────── */
-/*
-   Everything above is reversed for real text input elements.
-   This ensures:
-     - search field works normally
-     - workout name editing works normally
-     - keyboard opens normally
-     - text is selectable and copyable inside inputs
-*/
-input,
-textarea,
-[contenteditable="true"] {
-  -webkit-user-select: text;
-  user-select: text;
-  -webkit-touch-callout: default;
-  touch-action: auto;                 /* allow zoom-on-focus, keyboard behavior */
+  --tab-h:    calc(56px + env(safe-area-inset-bottom, 0px));
 }
 
 /* ── ROOT — mobile first ──────────────────────────────────────────────────── */
@@ -128,47 +48,53 @@ html {
   height: 100%;
   overflow: hidden;
   background: #E5E6E9;
+  -webkit-text-size-adjust: 100%;
 }
 body {
   font-family: var(--f-sys);
   width: 100%;
   height: 100%;
-  margin: 0;
-  padding: 0;
+  margin: 0; padding: 0;
   overflow: hidden;
-  /* iPhone/mobile default: match the app wallpaper colour — no gutters */
   background: #E5E6E9;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
-/* ── APP VIEWPORT — mobile default: full screen, no centering ─────────────── */
+/* ── APP VIEWPORT ─────────────────────────────────────────────────────────── */
+/*
+   Uses percentage height (html:100% → body:100% → .app-viewport:100%)
+   which is the most reliable chain on iOS Safari / standalone PWA.
+   100dvh / 100svh can mismatch the real available height in some iOS contexts.
+*/
 .app-viewport {
   position: relative;
-  width: 100vw;    /* explicit: never shrink below viewport width */
-  max-width: none; /* explicit: no max-width constraint on mobile  */
-  /* Height stack — last supported value wins:                     */
-  height: 100vh;                    /* universal fallback          */
-  height: -webkit-fill-available;   /* older iOS Safari            */
-  height: 100dvh;                   /* iOS 15.4+ / modern browsers */
+  width: 100%;
+  max-width: none;
+  height: 100%;
   background: #E5E6E9;
   overflow: hidden;
-  isolation: isolate;               /* new stacking context        */
+  isolation: isolate;
 }
 
-/* ── DESKTOP PREVIEW — only applies at 700px+ ────────────────────────────── */
+/* ── DESKTOP PREVIEW — 700px+ only ────────────────────────────────────────── */
 /*
-   700px is safely above every iPhone CSS pixel width (max 430pt).
-   All iPhones, in any orientation, in both Safari and standalone PWA
-   mode, stay below this threshold and use the full-screen default above.
-   This only fires on proper desktop / laptop browser windows.
+   All iPhones are ≤430pt CSS px. 700px safely targets desktop only.
+   On desktop we add the 44px top spacing and constrain width.
 */
 @media (min-width: 700px) {
+  :root {
+    --safe-top: 44px;
+    --tab-h: 56px;
+  }
+  html, body { height: 100dvh; overflow: hidden; }
   body {
     background: #0D0E11;
     display: flex;
     justify-content: center;
     align-items: flex-start;
   }
-
   .app-viewport {
     width: 430px;
     max-width: 430px;
@@ -176,25 +102,37 @@ body {
   }
 }
 
+/* ── APP-LIKE TOUCH BEHAVIOR ──────────────────────────────────────────────── */
+button, a, .card, .card-inner, .tap, .tab, .cta, .sbar,
+.tabs, .area, .push, .fsmodal, .sheet, .handle {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+svg { -webkit-user-drag: none; }
+img { -webkit-user-drag: none; pointer-events: none; }
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+  touch-action: auto;
+}
+
 /* ── STATUS BAR SPACER ────────────────────────────────────────────────────── */
-/*
-   Silent safe-area spacer. No fake "9:41" or icons.
-   On iPhone: height = actual system status bar area (env(safe-area-inset-top)).
-   On desktop: height = 44px minimum for comfortable spacing.
-*/
 .sbar {
   height: var(--safe-top);
   flex-shrink: 0;
   position: relative;
   z-index: 10;
+  background: transparent; /* always show wallpaper behind it */
 }
 
 /* ── SCREEN AREA ──────────────────────────────────────────────────────────── */
 .area {
   position: absolute;
-  top: var(--safe-top);   /* below system status bar  */
+  top: var(--safe-top);
   left: 0; right: 0;
-  bottom: var(--tab-h);   /* above tab bar            */
+  bottom: var(--tab-h);
   overflow: hidden;
   z-index: 5;
 }
@@ -203,25 +141,26 @@ body {
 .scroll {
   height: 100%;
   overflow-y: auto; overflow-x: hidden;
-  padding-bottom: 32px;
+  padding-bottom: 24px;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 .scroll::-webkit-scrollbar { display: none; }
-.scroll.notab { padding-bottom: 28px; }
+.scroll.notab { padding-bottom: 24px; }
 
 /* ── TAB BAR ──────────────────────────────────────────────────────────────── */
 .tabs {
   position: absolute;
   bottom: 0; left: 0; right: 0;
   height: var(--tab-h);
-  background: rgba(229,230,233,0.88);
+  background: rgba(229,230,233,0.92);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
   border-top: 1px solid rgba(10,10,15,0.07);
   display: flex;
   align-items: flex-start;
   justify-content: space-around;
-  padding-top: 10px;
+  padding-top: 8px;
   padding-bottom: var(--safe-bot);
   z-index: 40;
 }
@@ -256,8 +195,7 @@ body {
 .pill {
   display: inline-flex; align-items: center;
   padding: 4px 10px;
-  background: var(--blue-lt);
-  color: var(--blue);
+  background: var(--blue-lt); color: var(--blue);
   border-radius: 20px;
   font-family: var(--f-sys);
   font-size: 11px; font-weight: 600;
@@ -306,7 +244,7 @@ body {
   border-radius: 16px 16px 0 0;
   z-index: 90;
   transform: translateY(100%);
-  transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1);
   overflow: hidden;
   box-shadow: 0 -20px 60px rgba(0,0,0,0.2);
 }
@@ -325,12 +263,12 @@ body {
   z-index: 110;
   border-radius: 0;
   transform: translateY(100%);
-  transition: transform 0.40s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
   overflow: hidden;
 }
 .fsmodal.on { transform: translateY(0); }
 
-/* ── PUSH VIEWS ───────────────────────────────────────────────────────────── */
+/* ── PUSH VIEWS (WorkoutDetail etc.) ─────────────────────────────────────── */
 .push {
   position: absolute; inset: 0;
   background: #E5E6E9;
@@ -338,13 +276,39 @@ body {
   transform: translateX(100%);
   transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
   overflow: hidden;
+  pointer-events: none;  /* off-screen: no touch leakthrough */
 }
-.push.on { transform: translateX(0); }
+.push.on {
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+/* ── CATALOG FULL-SCREEN OVERLAY ──────────────────────────────────────────── */
+/*
+   position:fixed exits ALL parent stacking contexts.
+   The Catalog is ALWAYS full-viewport, never clipped by WorkoutDetail,
+   never behind GroupEditor/AdvancedSheet, never affected by parent overflow.
+   z-index:1000 ensures it paints above everything.
+*/
+.fullscreen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #E5E6E9;
+  overflow: hidden;
+  transform: translateX(100%);
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  pointer-events: none;
+}
+.fullscreen-overlay.on {
+  transform: translateX(0);
+  pointer-events: auto;
+}
 
 /* ── EXPAND ───────────────────────────────────────────────────────────────── */
 .expand {
   overflow: hidden;
-  transition: max-height 0.38s cubic-bezier(0.32,0.72,0,1), opacity 0.28s ease;
+  transition: max-height 0.36s cubic-bezier(0.32,0.72,0,1), opacity 0.26s ease;
 }
 
 /* ── TAP FEEDBACK ─────────────────────────────────────────────────────────── */
@@ -373,6 +337,6 @@ body {
   flex-shrink: 0;
 }
 .ex-icon.done    { background: #fff; }
-.ex-icon.pending { background: var(--d-surf); border: 2px solid rgba(255,255,255,0.12); border-radius: 10px; width: 44px; height: 44px; }
+.ex-icon.pending { background: var(--d-surf); border: 2px solid rgba(255,255,255,0.12); border-radius: 10px; }
 .ex-icon.active  { background: var(--d-surf); }
 .ex-icon.timed   { background: var(--d-surf); }
