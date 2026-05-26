@@ -777,9 +777,9 @@ const CatalogScreen = ({ open, mode, title, subtitle = "", sourceItem = null, ex
   const [showFilters, setShowFilters]       = useState(false);
   const [muscleFilter, setMuscleFilter]     = useState(null);
   const [equipmentFilter, setEquipmentFilter] = useState(null);
-  const [setupFilter, setSetupFilter]       = useState(null);
 
   const bodyRef = useRef(null);
+  const catalogSwipeRef = useRef(null); /* left-edge swipe-back gesture tracker */
 
   // Reset state each time the screen opens. Pre-fill muscle filter from source
   // exercise (SWAP) or workout's broad group (Add Exercise) so the All section
@@ -790,7 +790,6 @@ const CatalogScreen = ({ open, mode, title, subtitle = "", sourceItem = null, ex
       setSelected([]);
       setShowFilters(false);
       setEquipmentFilter(null);
-      setSetupFilter(null);
       if (sourceItem && sourceItem.ex) {
         const srcTab = sourceItem.ex.tab || (sourceItem.ex.muscles && sourceItem.ex.muscles[0]);
         const broad = srcTab ? (BROAD_TAB_FROM_SPECIFIC[srcTab] || srcTab) : null;
@@ -804,7 +803,7 @@ const CatalogScreen = ({ open, mode, title, subtitle = "", sourceItem = null, ex
 
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = 0;
-  }, [query, muscleFilter, equipmentFilter, setupFilter]);
+  }, [query, muscleFilter, equipmentFilter]);
 
   const isMulti = mode === "multi";
   const excludeSet = new Set(excludeNames);
@@ -814,7 +813,6 @@ const CatalogScreen = ({ open, mode, title, subtitle = "", sourceItem = null, ex
     const group = EQUIPMENT_GROUPS.find(g => g.name === equipmentFilter);
     return group ? group.match(c) : true;
   };
-  const setupMatch  = (c) => !setupFilter  || c.setup === setupFilter;
   const muscleMatch = (c) => {
     if (!muscleFilter) return true;
     const broad = BROAD_TAB_FROM_SPECIFIC[c.tab] || c.tab;
@@ -831,7 +829,7 @@ const CatalogScreen = ({ open, mode, title, subtitle = "", sourceItem = null, ex
       for (let i = 0; i < CATALOG_BUNDLE.rows.length; i++) {
         const c = unpackCatalog(i);
         if (!matcher(c)) continue;
-        if (!muscleMatch(c) || !eqMatch(c) || !setupMatch(c)) continue;
+        if (!muscleMatch(c) || !eqMatch(c)) continue;
         scored.push([i, scorer(c)]);
       }
       scored.sort((a, b) => b[1] - a[1]);
@@ -840,10 +838,10 @@ const CatalogScreen = ({ open, mode, title, subtitle = "", sourceItem = null, ex
     let list = muscleFilter && CATALOG_BY_BROAD[muscleFilter]
       ? CATALOG_BY_BROAD[muscleFilter]
       : Array.from({ length: CATALOG_BUNDLE.rows.length }, (_, i) => i);
-    if (equipmentFilter || setupFilter) {
+    if (equipmentFilter) {
       list = list.filter(i => {
         const c = unpackCatalog(i);
-        return c && eqMatch(c) && setupMatch(c);
+        return c && eqMatch(c);
       });
     }
     return list;
@@ -851,17 +849,15 @@ const CatalogScreen = ({ open, mode, title, subtitle = "", sourceItem = null, ex
 
   const renderLimit = 80;
   const renderList  = visibleIndices.slice(0, renderLimit);
-  const overflow    = visibleIndices.length - renderList.length;
 
-  const showSuggestions = !query && !equipmentFilter && !setupFilter;
+  const showSuggestions = !query && !equipmentFilter;
   const suggestions = showSuggestions
     ? (sourceItem
         ? buildSwapSuggestions(sourceItem, excludeNames, 6)
         : buildSuggestions(workoutName, excludeNames, 6))
     : [];
 
-  const activeFilterCount = (muscleFilter ? 1 : 0) + (equipmentFilter ? 1 : 0) + (setupFilter ? 1 : 0);
-  const setupOptions = getCatalogSetupOptions();
+  const activeFilterCount = (muscleFilter ? 1 : 0) + (equipmentFilter ? 1 : 0);
 
   const toggle = (id) => {
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -878,7 +874,6 @@ const CatalogScreen = ({ open, mode, title, subtitle = "", sourceItem = null, ex
   const clearFilters = () => {
     setMuscleFilter(null);
     setEquipmentFilter(null);
-    setSetupFilter(null);
   };
 
   // Row component for both Suggested and All sections
@@ -921,7 +916,27 @@ const CatalogScreen = ({ open, mode, title, subtitle = "", sourceItem = null, ex
   const suggestionLabel  = sourceItem ? "Suggested Swaps" : `Suggested for ${workoutName || "Workout"}`;
 
   return (
-    <div className={`fullscreen-push ${open?"on":""}`}>
+    <div
+      className={`fullscreen-push ${open?"on":""}`}
+      onTouchStart={(e) => {
+        /* Left-edge swipe-back. Ignored when target is inside a control. */
+        if (showFilters) return;
+        const t = e.touches[0];
+        if (t.clientX > 24) return;
+        catalogSwipeRef.current = { x: t.clientX, y: t.clientY };
+      }}
+      onTouchMove={(e) => {
+        if (!catalogSwipeRef.current) return;
+        const t = e.touches[0];
+        const dx = t.clientX - catalogSwipeRef.current.x;
+        const dy = Math.abs(t.clientY - catalogSwipeRef.current.y);
+        if (dx > 48 && dy < 40) {
+          catalogSwipeRef.current = null;
+          onClose();
+        }
+      }}
+      onTouchEnd={() => { catalogSwipeRef.current = null; }}
+    >
 
       {/* Topographic wallpaper */}
       <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", zIndex:0, pointerEvents:"none" }}
@@ -943,37 +958,31 @@ const CatalogScreen = ({ open, mode, title, subtitle = "", sourceItem = null, ex
         display:"flex", flexDirection:"column", zIndex:1,
       }}>
 
-        {/* Top bar: close + selection count */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-                      padding:"6px 14px 0 8px", flexShrink:0 }}>
-          <button onClick={onClose} className="tap"
-            style={{ display:"flex", alignItems:"center", gap:4, background:"none", border:"none",
-                     cursor:"pointer", padding:"8px 10px", WebkitTapHighlightColor:"transparent" }}>
-            <Icon name="ChevronLeft" size={22} color="var(--ink)" sw={2.4}/>
-            <span style={{ fontSize:16, color:"var(--ink)", fontWeight:500 }}>Back</span>
-          </button>
-          {isMulti && selected.length > 0 ? (
-            <span style={{ fontSize:13, fontWeight:600, color:"var(--blue)", padding:"8px 12px" }}>
+        {/* Selection count (right side only when multi). No back button — swipe from left edge to dismiss. */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end",
+                      padding:"8px 18px 0", flexShrink:0, minHeight:36 }}>
+          {isMulti && selected.length > 0 && (
+            <span style={{ fontSize:13, fontWeight:600, color:"var(--blue)", letterSpacing:"0.05em" }}>
               {selected.length} selected
             </span>
-          ) : (
-            <div style={{ width:50 }}/>
           )}
         </div>
 
-        {/* Title + thick underline + optional subtitle */}
-        <div style={{ padding:"2px 20px 16px", textAlign:"center", flexShrink:0 }}>
-          <h1 style={{
-            margin:0, fontFamily:"var(--f-os)",
-            fontSize:"clamp(38px, 11vw, 50px)",
-            fontWeight:700, textTransform:"uppercase",
-            color:"var(--ink)", letterSpacing:"0.02em", lineHeight:1.0,
-          }}>
-            {resolvedTitle}
-          </h1>
-          <div style={{ height:3, background:"var(--ink)", width:56, margin:"10px auto 0", borderRadius:1.5 }}/>
+        {/* Title with underline that matches title width — wrapped in inline-block group */}
+        <div style={{ padding:"22px 20px 28px", textAlign:"center", flexShrink:0 }}>
+          <div style={{ display:"inline-block" }}>
+            <h1 style={{
+              margin:0, fontFamily:"var(--f-os)",
+              fontSize:"clamp(38px, 11vw, 50px)",
+              fontWeight:700, textTransform:"uppercase",
+              color:"var(--ink)", letterSpacing:"0.02em", lineHeight:1.0,
+            }}>
+              {resolvedTitle}
+            </h1>
+            <div style={{ height:3, background:"var(--ink)", width:"100%", marginTop:10, borderRadius:1.5 }}/>
+          </div>
           {subtitle && (
-            <div style={{ fontSize:14, color:"var(--ink2)", marginTop:10, fontStyle:"italic" }}>
+            <div style={{ fontSize:14, color:"var(--ink2)", marginTop:12, fontStyle:"italic" }}>
               {subtitle}
             </div>
           )}
@@ -985,56 +994,46 @@ const CatalogScreen = ({ open, mode, title, subtitle = "", sourceItem = null, ex
           background:"#FFFFFF", borderTop:"1px solid var(--line)",
         }}>
 
-          {/* Active filter chips bar (only when filters set) */}
+          {/* Active filters as rectangular squares — tap again to remove */}
           {activeFilterCount > 0 && (
-            <div style={{ display:"flex", flexWrap:"wrap", gap:8, padding:"14px 20px 6px", borderBottom:"1px solid var(--line)" }}>
+            <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", gap:10, padding:"16px 20px 4px" }}>
               {muscleFilter && (
-                <div style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"6px 8px 6px 12px", background:"var(--ink)", color:"#fff", borderRadius:999, fontSize:13, fontWeight:500 }}>
+                <button
+                  className="cat-square on"
+                  onClick={() => setMuscleFilter(null)}
+                  style={{ textTransform:"uppercase", fontFamily:"var(--f-os)", fontWeight:700, letterSpacing:"0.10em", fontSize:14 }}>
                   {muscleFilter}
-                  <button onClick={() => setMuscleFilter(null)} style={{ background:"none", border:"none", padding:2, color:"#fff", cursor:"pointer", display:"flex" }}>
-                    <Icon name="X" size={13} color="#fff" sw={2.5}/>
-                  </button>
-                </div>
+                </button>
               )}
               {equipmentFilter && (
-                <div style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"6px 8px 6px 12px", background:"var(--ink)", color:"#fff", borderRadius:999, fontSize:13, fontWeight:500 }}>
+                <button
+                  className="cat-square on"
+                  onClick={() => setEquipmentFilter(null)}
+                  style={{ textTransform:"uppercase", fontFamily:"var(--f-os)", fontWeight:700, letterSpacing:"0.10em", fontSize:14 }}>
                   {equipmentFilter}
-                  <button onClick={() => setEquipmentFilter(null)} style={{ background:"none", border:"none", padding:2, color:"#fff", cursor:"pointer", display:"flex" }}>
-                    <Icon name="X" size={13} color="#fff" sw={2.5}/>
-                  </button>
-                </div>
+                </button>
               )}
-              {setupFilter && (
-                <div style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"6px 8px 6px 12px", background:"var(--ink)", color:"#fff", borderRadius:999, fontSize:13, fontWeight:500 }}>
-                  {setupFilter}
-                  <button onClick={() => setSetupFilter(null)} style={{ background:"none", border:"none", padding:2, color:"#fff", cursor:"pointer", display:"flex" }}>
-                    <Icon name="X" size={13} color="#fff" sw={2.5}/>
-                  </button>
-                </div>
-              )}
-              <button onClick={clearFilters}
-                style={{ background:"none", border:"none", padding:"6px 8px", fontSize:13, color:"var(--ink2)", cursor:"pointer", textDecoration:"underline" }}>
-                Clear all
-              </button>
             </div>
           )}
 
-          {/* SUGGESTED SWAPS */}
+          {/* SUGGESTED SWAPS — centered heading */}
           {suggestions.length > 0 && (
             <div style={{ borderBottom:"8px solid #E5E6E9" }}>
-              <div style={{ padding:"18px 20px 6px",
-                            fontSize:12, fontWeight:700, letterSpacing:"0.18em",
-                            textTransform:"uppercase", color:"var(--ink3)" }}>
+              <div style={{ padding:"22px 20px 10px", textAlign:"center",
+                            fontSize:13, fontWeight:700, letterSpacing:"0.22em",
+                            textTransform:"uppercase", color:"var(--ink2)",
+                            fontFamily:"var(--f-os)" }}>
                 {suggestionLabel}
               </div>
               {suggestions.map(ex => <Row key={`sug-${ex.id}`} ex={ex} sectionKey="sug"/>)}
             </div>
           )}
 
-          {/* ALL section header */}
-          <div style={{ padding:"18px 20px 6px",
-                        fontSize:12, fontWeight:700, letterSpacing:"0.18em",
-                        textTransform:"uppercase", color:"var(--ink3)" }}>
+          {/* ALL — centered heading */}
+          <div style={{ padding:"22px 20px 10px", textAlign:"center",
+                        fontSize:13, fontWeight:700, letterSpacing:"0.22em",
+                        textTransform:"uppercase", color:"var(--ink2)",
+                        fontFamily:"var(--f-os)" }}>
             {allSectionLabel}
           </div>
 
@@ -1063,13 +1062,6 @@ const CatalogScreen = ({ open, mode, title, subtitle = "", sourceItem = null, ex
             if (!ex) return null;
             return <Row key={`all-${id}`} ex={ex} sectionKey="all"/>;
           })}
-
-          {overflow > 0 && (
-            <div style={{ padding:"18px 20px 28px", fontSize:13, color:"var(--ink3)",
-                          textAlign:"center", borderBottom:"1px solid var(--line)" }}>
-              +{overflow.toLocaleString()} more \u2014 refine your search to narrow results
-            </div>
-          )}
 
           {/* Bottom spacer so last row clears the sticky bar (and CTA when multi) */}
           <div style={{ height: isMulti ? 180 : 96 }}/>
@@ -1124,69 +1116,75 @@ const CatalogScreen = ({ open, mode, title, subtitle = "", sourceItem = null, ex
 
       {/* Filter sheet */}
       <div className={`cat-filter-sheet ${showFilters?"on":""}`}>
+        {/* Handle */}
         <div style={{ flexShrink:0, paddingTop:10 }}>
           <div style={{ width:36, height:5, background:"var(--ink4)", borderRadius:3, margin:"0 auto" }}/>
         </div>
-        <div style={{ flexShrink:0, padding:"14px 20px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"1px solid var(--line)" }}>
-          <div style={{ fontFamily:"var(--f-os)", fontSize:22, fontWeight:700, textTransform:"uppercase", color:"var(--ink)", letterSpacing:"0.02em" }}>
+
+        {/* Sheet title — centered, larger, Oswald */}
+        <div style={{ flexShrink:0, padding:"18px 20px 6px", textAlign:"center" }}>
+          <div style={{ fontFamily:"var(--f-os)", fontSize:28, fontWeight:700,
+                        textTransform:"uppercase", color:"var(--ink)",
+                        letterSpacing:"0.04em", lineHeight:1.0 }}>
             Filters
           </div>
-          <button onClick={clearFilters}
-            style={{ background:"none", border:"none", fontSize:14, color:"var(--ink2)", cursor:"pointer", padding:"6px 8px" }}>
-            Clear All
-          </button>
         </div>
-        <div style={{ flex:1, minHeight:0, overflowY:"auto", padding:"16px 20px 0" }}>
-          <div style={{ marginBottom:20 }}>
-            <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)", marginBottom:10 }}>
+
+        {/* Scrollable body */}
+        <div style={{ flex:1, minHeight:0, overflowY:"auto", padding:"22px 20px 16px" }}>
+
+          {/* Muscle Group */}
+          <div style={{ marginBottom:28 }}>
+            <div style={{ fontFamily:"var(--f-os)",
+                          fontSize:14, fontWeight:700, letterSpacing:"0.22em",
+                          textTransform:"uppercase", color:"var(--ink2)",
+                          textAlign:"center", marginBottom:14 }}>
               Muscle Group
             </div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(2, 1fr)", gap:10 }}>
               {CATALOG_BROAD_TABS.map(tab => (
                 <button key={tab}
-                  className={`cat-chip ${muscleFilter === tab ? "on" : ""}`}
-                  onClick={() => setMuscleFilter(muscleFilter === tab ? null : tab)}>
+                  className={`cat-square ${muscleFilter === tab ? "on" : ""}`}
+                  onClick={() => setMuscleFilter(muscleFilter === tab ? null : tab)}
+                  style={{ width:"100%", fontFamily:"var(--f-os)", fontWeight:600,
+                           textTransform:"uppercase", letterSpacing:"0.08em", fontSize:14 }}>
                   {tab}
                 </button>
               ))}
             </div>
           </div>
-          <div style={{ marginBottom:20 }}>
-            <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)", marginBottom:10 }}>
-              Equipment / Type
+
+          {/* Equipment Type */}
+          <div style={{ marginBottom:8 }}>
+            <div style={{ fontFamily:"var(--f-os)",
+                          fontSize:14, fontWeight:700, letterSpacing:"0.22em",
+                          textTransform:"uppercase", color:"var(--ink2)",
+                          textAlign:"center", marginBottom:14 }}>
+              Equipment Type
             </div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(2, 1fr)", gap:10 }}>
               {EQUIPMENT_GROUPS.filter(g => g.name !== "All").map(g => (
                 <button key={g.name}
-                  className={`cat-chip ${equipmentFilter === g.name ? "on" : ""}`}
-                  onClick={() => setEquipmentFilter(equipmentFilter === g.name ? null : g.name)}>
+                  className={`cat-square ${equipmentFilter === g.name ? "on" : ""}`}
+                  onClick={() => setEquipmentFilter(equipmentFilter === g.name ? null : g.name)}
+                  style={{ width:"100%", fontFamily:"var(--f-os)", fontWeight:600,
+                           textTransform:"uppercase", letterSpacing:"0.08em", fontSize:14 }}>
                   {g.name}
                 </button>
               ))}
             </div>
           </div>
-          <div style={{ marginBottom:20 }}>
-            <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)", marginBottom:10 }}>
-              Variation / Setup
-            </div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-              {setupOptions.map(s => (
-                <button key={s}
-                  className={`cat-chip ${setupFilter === s ? "on" : ""}`}
-                  onClick={() => setSetupFilter(setupFilter === s ? null : s)}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
-        <div style={{ flexShrink:0, padding:"12px 16px calc(14px + var(--safe-bot))", borderTop:"1px solid var(--line)" }}>
-          <button onClick={() => setShowFilters(false)}
-            style={{ width:"100%", padding:"15px 20px",
-                     background:"var(--ink)", color:"#fff", border:"none", borderRadius:14,
-                     cursor:"pointer", fontFamily:"var(--f-os)", fontSize:14, fontWeight:700,
-                     letterSpacing:"0.16em", textTransform:"uppercase" }}>
-            Done {activeFilterCount > 0 ? `(${activeFilterCount})` : ""}
+
+        {/* Bottom actions — text only, no boxes, no outlines */}
+        <div style={{ flexShrink:0, padding:"14px 24px calc(18px + var(--safe-bot))",
+                      display:"flex", alignItems:"center", justifyContent:"space-between",
+                      borderTop:"1px solid var(--line)" }}>
+          <button onClick={clearFilters} className="cat-filter-action muted">
+            Clear All
+          </button>
+          <button onClick={() => setShowFilters(false)} className="cat-filter-action">
+            Filter It
           </button>
         </div>
       </div>
@@ -2955,7 +2953,7 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
 
         <div className="scroll notab">
 
-          <div style={{ textAlign:"center", padding:"8px 24px 0" }}>
+          <div style={{ textAlign:"center", padding:"32px 24px 0" }}>
             {editingName ? (
               <input
                 value={workoutName}
@@ -3001,15 +2999,15 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
                 {workoutName}
               </div>
             )}
-            <div style={{ marginTop:8, fontSize:11, color:"var(--ink3)" }}>
+            <div style={{ marginTop:12, fontSize:13, color:"var(--ink3)", letterSpacing:"0.04em" }}>
               {(items.length > 0 ? computeBroadMuscles(items) : workout.muscles).join("  ·  ") || "—"}
             </div>
-            <div style={{ marginTop:14, fontSize:10, color:"var(--ink3)", fontStyle:"italic" }}>
+            <div style={{ marginTop:18, fontSize:12, color:"var(--ink3)", fontStyle:"italic", letterSpacing:"0.02em" }}>
               Tap to edit &nbsp;·&nbsp; SWAP to replace &nbsp;·&nbsp; Hold to reorder &nbsp;·&nbsp; Swipe to delete
             </div>
           </div>
 
-          <div style={{ height:14 }} />
+          <div style={{ height:26 }} />
 
           <div style={{ padding:"0 30px" }}>
             {renderItems.map((rit, idx) => {
