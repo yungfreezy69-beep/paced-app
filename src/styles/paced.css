@@ -45,7 +45,7 @@
   */
   --safe-top: env(safe-area-inset-top, 0px);  /* exact device value; 44px floor added in 700px+ query */
   --safe-bot: env(safe-area-inset-bottom, 0px);
-  --tab-h:    calc(58px + env(safe-area-inset-bottom, 0px));  /* 58px base + home bar */
+  --tab-h:    calc(64px + env(safe-area-inset-bottom, 0px));  /* 64px base + home bar */
 }
 
 /* ── APP-LIKE TOUCH BEHAVIOR ──────────────────────────────────────────────── */
@@ -165,7 +165,7 @@ body {
   /* On desktop: restore 44px safe-top (env is 0 on desktop) and fix tab height */
   :root {
     --safe-top: 44px;
-    --tab-h:    58px;
+    --tab-h:    64px;
   }
   /* Also set a reliable height for the desktop container */
   html, body { height: 100dvh; }
@@ -235,16 +235,16 @@ body {
 }
 .tab {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 4px 20px;
+  padding: 6px 20px;
   cursor: pointer; user-select: none;
   color: var(--ink3);
   transition: color 0.14s ease;
   -webkit-tap-highlight-color: transparent;
 }
-.tab.on { color: var(--blue); }
+.tab.on { color: var(--ink); }
 .tab:active { opacity: 0.7; }
 .tab span {
-  font-family: var(--f-os); font-size: 10px; font-weight: 500;
+  font-family: var(--f-os); font-size: 13px; font-weight: 500;
   letter-spacing: 0.14em; text-transform: uppercase;
 }
 

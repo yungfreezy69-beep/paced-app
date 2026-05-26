@@ -1993,6 +1993,7 @@ const SetsList = ({ itemId, items, updateSetField, deleteSet, addSet }) => {
 /* ── ADVANCED SHEET — single exercise ── */
 const AdvancedSheet = ({ open, itemId, items, openCatalog, workoutName, updateItem, updateSetField, addSet, deleteSet, setItemTechnique, onCreatePair, onClose }) => {
   const [showGlossary, setShowGlossary] = useState(false);
+  const dragDismissRef = useRef(null); /* drag-down-to-dismiss tracker */
   const [techMenuOpen, setTechMenuOpen] = useState(false);
 
   const it = itemId !== null ? items.find(x => x.id === itemId) : null;
@@ -2035,14 +2036,31 @@ const AdvancedSheet = ({ open, itemId, items, openCatalog, workoutName, updateIt
     <>
       <div onClick={onClose} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.45)", zIndex:25, opacity:open?1:0, pointerEvents:open?"auto":"none", transition:"opacity 0.26s" }}/>
 
-      <div style={{
-        position:"absolute", left:0, right:0, bottom:0, top:40,
-        background:"#F4F4F7", borderRadius:"20px 20px 0 0", zIndex:26,
-        display:"flex", flexDirection:"column", overflow:"hidden",
-        transform: open?"translateY(0)":"translateY(100%)",
-        transition:"transform 0.36s cubic-bezier(0.32,0.72,0,1)",
-        boxShadow:"0 -24px 64px rgba(0,0,0,0.22)",
-      }}>
+      <div
+        style={{
+          position:"absolute", left:0, right:0, bottom:0, top:40,
+          background:"#F4F4F7", borderRadius:"20px 20px 0 0", zIndex:26,
+          display:"flex", flexDirection:"column", overflow:"hidden",
+          transform: open?"translateY(0)":"translateY(100%)",
+          transition:"transform 0.36s cubic-bezier(0.32,0.72,0,1)",
+          boxShadow:"0 -24px 64px rgba(0,0,0,0.22)",
+        }}
+        onTouchStart={(e) => {
+          const t = e.touches[0];
+          dragDismissRef.current = { y: t.clientY, startY: t.clientY };
+        }}
+        onTouchMove={(e) => {
+          if (!dragDismissRef.current) return;
+          const t = e.touches[0];
+          dragDismissRef.current.y = t.clientY;
+        }}
+        onTouchEnd={() => {
+          if (!dragDismissRef.current) return;
+          const dist = dragDismissRef.current.y - dragDismissRef.current.startY;
+          dragDismissRef.current = null;
+          if (dist > 90) onClose();
+        }}
+      >
 
         <div style={{ flexShrink:0 }}>
           <div style={{ width:36, height:5, background:"var(--ink4)", borderRadius:3, margin:"10px auto 0" }}/>
@@ -2277,7 +2295,7 @@ const GroupEditor = ({ open, primaryId, items, openCatalog, workoutName, updateI
 
 
 /* ── WORKOUT DETAIL PUSH ── */
-const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setCustomNames, customItems = {}, setCustomItems }) => {
+const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setCustomNames, customItems = {}, setCustomItems, openCatalog }) => {
   const [items, setItems] = useState([]);
   const idCounter = useRef(0);
 
@@ -2285,8 +2303,6 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
   const [workoutName, setWorkoutName] = useState("");
   const [editingName, setEditingName] = useState(false);
 
-  // Catalog state: { open, mode, title, excludeNames, onPick, onConfirm }
-  const [catalogState, setCatalogState] = useState({ open: false });
 
   const [advancedFor, setAdvancedFor] = useState(null);
   const [groupEditorFor, setGroupEditorFor] = useState(null);
@@ -2307,6 +2323,7 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
 
   const CARD_HEIGHT = 86;
   const swipeBackRef = useRef(null);
+  const suppressTapRef = useRef(false); /* guards against drag-end triggering tap */
 
   useEffect(() => {
     if (workout) {
@@ -2361,8 +2378,6 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
   if (!workout) return <div className={`push ${open?"on":""}`}/>;
 
   /* Catalog control */
-  const openCatalog = (opts) => setCatalogState({ open: true, ...opts });
-  const closeCatalog = () => setCatalogState({ open: false });
 
   /* Item handlers */
   const updateItem = (id, field, val) => {
@@ -2697,6 +2712,8 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
         setDragOffsetY(0);
         setTargetIdx(null);
         targetIdxRef.current = null;
+        suppressTapRef.current = true;
+        setTimeout(() => { suppressTapRef.current = false; }, 300);
       }
     };
 
@@ -2707,6 +2724,7 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
   };
 
   const onCardTap = (rit) => {
+    if (suppressTapRef.current) return; /* drag just ended — ignore */
     if (rit.type === 'group') {
       setGroupEditorFor(rit.primaryId);
     } else {
@@ -2731,7 +2749,7 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
       className={`push ${open?"on":""}`}
       style={{ background:"#E5E6E9" }}
       onTouchStart={(e) => {
-        if (advancedFor !== null || groupEditorFor !== null || catalogState.open) return;
+        if (advancedFor !== null || groupEditorFor !== null) return;
         const t = e.touches[0];
         if (t.clientX > 24) return;
         swipeBackRef.current = { x: t.clientX, y: t.clientY };
@@ -2799,7 +2817,7 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
                 }}
                 autoFocus
                 style={{
-                  fontFamily:"var(--f-os)", fontSize:42, fontWeight:500, textTransform:"uppercase",
+                  fontFamily:"var(--f-os)", fontSize:58, fontWeight:700, textTransform:"uppercase",
                   color:"var(--ink)", lineHeight:0.9, letterSpacing:"0.01em",
                   background:"transparent", border:"none", outline:"none",
                   textAlign:"center", width:"100%",
@@ -2810,7 +2828,7 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
             ) : (
               <div onClick={() => setEditingName(true)}
                 style={{
-                  fontFamily:"var(--f-os)", fontSize:42, fontWeight:500, textTransform:"uppercase",
+                  fontFamily:"var(--f-os)", fontSize:58, fontWeight:700, textTransform:"uppercase",
                   color:"var(--ink)", lineHeight:0.9, letterSpacing:"0.01em",
                   cursor:"text",
                 }}>
@@ -2898,15 +2916,15 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
                          boxShadow:"0 4px 16px rgba(10,10,15,0.10)",
                          cursor:"pointer",
                          display:"flex", alignItems:"stretch",
-                         minHeight:86, overflow:"hidden",
+                         minHeight:100, overflow:"hidden",
                        }}>
                          {/* Left: name + muscle */}
                          <div style={{ flex:1, padding:"16px 10px 16px 18px", display:"flex", flexDirection:"column", justifyContent:"center", gap:3 }}>
-                           <div style={{ fontFamily:"var(--f-os)", fontSize:17, fontWeight:600, textTransform:"uppercase", color:"var(--ink)", letterSpacing:"0.04em", lineHeight:1.2 }}>
+                           <div style={{ fontFamily:"var(--f-os)", fontSize:19, fontWeight:600, textTransform:"uppercase", color:"var(--ink)", letterSpacing:"0.04em", lineHeight:1.2 }}>
                              {rit.item.ex.name}
                            </div>
                            {rit.item.ex.muscles && rit.item.ex.muscles[0] ? (
-                             <div style={{ fontSize:12, color:"var(--ink3)", fontFamily:"var(--f-sys)" }}>
+                             <div style={{ fontSize:13, color:"var(--ink2)", fontFamily:"var(--f-sys)" }}>
                                {rit.item.ex.muscles[0]}
                              </div>
                            ) : null}
@@ -2915,10 +2933,10 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
                          <div style={{ width:1, background:"var(--line)", margin:"14px 0" }}/>
                          {/* Right: metric summary + SWAP */}
                          <div style={{ width:120, padding:"14px 14px 14px 12px", display:"flex", flexDirection:"column", justifyContent:"center", gap:4, background:"rgba(10,10,15,0.02)" }}>
-                           <div style={{ fontFamily:"var(--f-os)", fontSize:22, fontWeight:700, color:"var(--ink)", lineHeight:1 }}>
+                           <div style={{ fontFamily:"var(--f-os)", fontSize:36, fontWeight:700, color:"var(--ink)", lineHeight:1 }}>
                              {rit.item.sets} × {(rit.item.ex.type === "timed" || rit.item.durSec) ? `${rit.item.durSec||0}s` : (rit.item.reps || "—")}
                            </div>
-                           <div style={{ fontSize:12, color:"var(--ink3)", fontFamily:"var(--f-sys)" }}>
+                           <div style={{ fontSize:13, color:"var(--ink2)", fontFamily:"var(--f-sys)" }}>
                              {(rit.item.restSec ?? 90)}s rest
                            </div>
                            <button
@@ -2929,6 +2947,7 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
                                  mode:"single",
                                  title:`Swap ${rit.item.ex.name}`,
                                  excludeNames: items.filter(x => x.id !== rit.item.id).map(x => x.ex.name),
+                                 workoutName: workoutName,
                                  onPick: (ce) => swapItem(rit.item.id, ce),
                                });
                              }}
@@ -3055,16 +3074,6 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
 
       {/* Catalog must live OUTSIDE the top:54 inner container so it fully
           covers the WorkoutDetail SBar — otherwise we double-stack status bars */}
-      <CatalogScreen
-        open={catalogState.open}
-        mode={catalogState.mode}
-        title={catalogState.title}
-        excludeNames={catalogState.excludeNames || []}
-        workoutName={workoutName}
-        onPick={catalogState.onPick}
-        onConfirm={catalogState.onConfirm}
-        onClose={closeCatalog}
-      />
     </div>
   );
 };
@@ -3329,7 +3338,7 @@ const Tabs = ({ active, onChange }) => (
   <div className="tabs">
     {[["today","Today","Home"],["schedule","Schedule","Calendar"],["profile","Profile","User"]].map(([id,label,icon])=>(
       <div key={id} className={`tab ${active===id?"on":""}`} onClick={()=>onChange(id)}>
-        <Icon name={icon} size={22} sw={active===id?2.4:1.8}/>
+        <Icon name={icon} size={26} sw={active===id?2.6:1.8}/>
         <span>{label}</span>
       </div>
     ))}
@@ -3351,6 +3360,12 @@ const App = () => {
   // Today reads both; WorkoutDetail reads and writes both.
   const [customNames, setCustomNames] = useState({});
   const [customItems, setCustomItems] = useState({});
+
+  // Catalog state lifted to App level so CatalogScreen renders outside WorkoutDetail's
+  // transform context and can always cover the full viewport.
+  const [catalogState, setCatalogState] = useState({ open: false });
+  const openCatalog = (opts) => setCatalogState({ open: true, ...opts });
+  const closeCatalog = () => setCatalogState({ open: false });
 
   return (
     <>
@@ -3396,6 +3411,7 @@ const App = () => {
         setCustomNames={setCustomNames}
         customItems={customItems}
         setCustomItems={setCustomItems}
+        openCatalog={openCatalog}
         onClose={()=>setDetail(false)}
         onStart={()=>{ setDetail(false); setTimeout(()=>setActive(true),200); }}/>
 
@@ -3403,6 +3419,19 @@ const App = () => {
         customNames={customNames}
         customItems={customItems}
         onClose={()=>setActive(false)}/>
+
+      {/* Catalog at App level — position:absolute here resolves to .app-viewport,
+          not inside WorkoutDetail's transform context. This fixes the clipping bug. */}
+      <CatalogScreen
+        open={catalogState.open}
+        mode={catalogState.mode}
+        title={catalogState.title}
+        excludeNames={catalogState.excludeNames || []}
+        workoutName={catalogState.workoutName || ""}
+        onPick={catalogState.onPick}
+        onConfirm={catalogState.onConfirm}
+        onClose={closeCatalog}
+      />
     </>
   );
 };
