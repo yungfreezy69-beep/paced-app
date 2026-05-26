@@ -75,6 +75,10 @@
       <path d="M -10 -10 L 110 -10 C 120 17 107 60 86 84 C 65 108 34 96 12 139 C 4 155 -10 160 -10 148 Z"
             fill="#F4F4F7" filter="url(#pcs)"/>
 
+      <!-- Layer 9: Top-center/right coverage — fills bare upper-screen area -->
+      <path d="M 180 -10 L 403 -10 L 403 130 C 376 112 350 124 326 106 C 302 88 278 98 256 78 C 234 58 208 26 180 -10 Z"
+            fill="#F0F1F4" filter="url(#pcs)"/>
+
   </svg>
 
   <div id="root"></div>
@@ -827,7 +831,7 @@ const CatalogScreen = ({ open, mode, title, excludeNames = [], workoutName = "",
     : (activeSub === 0 ? `All ${activeTab}` : `${activeTab} · ${subs[activeSub].name}`);
 
   return (
-    <div className={`push ${open?"on":""}`} style={{ background:"#E5E6E9", fontFamily: BODY_FONT }}>
+    <div className={`fullscreen-push ${open?"on":""}`} style={{ fontFamily: BODY_FONT }}>
 
       {/* Topographic wallpaper — same family as Today / Full Details */}
       <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", zIndex:0, pointerEvents:"none" }}
@@ -1184,7 +1188,7 @@ const WorkoutCard = ({ workout, onOpenDetail, customNames = {}, customItems = {}
             <div style={{ fontFamily:"var(--f-sys)", fontSize:11, fontWeight:600, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--ink3)", marginBottom:8 }}>
               Today
             </div>
-            <div style={{ fontFamily:"var(--f-os)", fontSize:52, fontWeight:600, textTransform:"uppercase", lineHeight:0.88, color:"var(--ink)", letterSpacing:"0.01em" }}>
+            <div style={{ fontFamily:"var(--f-os)", fontSize:"clamp(64px, 17vw, 78px)", fontWeight:700, textTransform:"uppercase", lineHeight:0.88, color:"var(--ink)", letterSpacing:"0.01em" }}>
               {displayName}
             </div>
           </div>
@@ -1246,10 +1250,10 @@ const WorkoutCard = ({ workout, onOpenDetail, customNames = {}, customItems = {}
         </div>
         <button
           className="tap"
-          style={{ fontSize:13, color:"var(--ink)", fontWeight:500, background:"none", border:"none", textDecoration:"underline", textUnderlineOffset:3 }}
           onClick={(e)=>{ e.stopPropagation(); onOpenDetail(workout); }}
+          style={{ background:"var(--ink)", color:"#fff", border:"none", borderRadius:10, padding:"10px 22px", fontFamily:"var(--f-os)", fontSize:13, fontWeight:700, letterSpacing:"0.14em", textTransform:"uppercase", cursor:"pointer", WebkitTapHighlightColor:"transparent" }}
         >
-          Full Details
+          EDIT
         </button>
       </div>
     </div>
@@ -2029,104 +2033,84 @@ const AdvancedSheet = ({ open, itemId, items, openCatalog, workoutName, updateIt
 
   return (
     <>
-      <div onClick={onClose} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.5)", zIndex:25, opacity: open?1:0, pointerEvents: open?"auto":"none", transition:"opacity 0.28s" }}/>
+      <div onClick={onClose} style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.45)", zIndex:25, opacity:open?1:0, pointerEvents:open?"auto":"none", transition:"opacity 0.26s" }}/>
+
       <div style={{
-        position:"absolute", left:0, right:0, bottom:0, top:50,
-        background:"#F4F4F7", borderRadius:"16px 16px 0 0", zIndex:26, overflow:"hidden",
+        position:"absolute", left:0, right:0, bottom:0, top:40,
+        background:"#F4F4F7", borderRadius:"20px 20px 0 0", zIndex:26,
+        display:"flex", flexDirection:"column", overflow:"hidden",
         transform: open?"translateY(0)":"translateY(100%)",
         transition:"transform 0.36s cubic-bezier(0.32,0.72,0,1)",
-        boxShadow:"0 -20px 60px rgba(0,0,0,0.22)",
+        boxShadow:"0 -24px 64px rgba(0,0,0,0.22)",
       }}>
-        <div style={{ width:36, height:5, background:"var(--ink4)", borderRadius:3, margin:"8px auto 0" }}/>
 
-        <div style={{ padding:"14px 20px 14px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", padding:4 }}>
-            <Icon name="X" size={20} color="var(--ink)" sw={2}/>
-          </button>
-          <div style={{ fontFamily:"var(--f-os)", fontSize:20, fontWeight:700, textTransform:"uppercase", color:"var(--ink)", letterSpacing:"0.03em", textAlign:"center", flex:1 }}>
-            {it?.ex.name || ""}
+        <div style={{ flexShrink:0 }}>
+          <div style={{ width:36, height:5, background:"var(--ink4)", borderRadius:3, margin:"10px auto 0" }}/>
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"10px 20px 8px" }}>
+            <div style={{ flex:1, fontFamily:"var(--f-os)", fontSize:24, fontWeight:700, textTransform:"uppercase", color:"var(--ink)", letterSpacing:"0.02em", lineHeight:1.1 }}>
+              {it?.ex.name || ""}
+            </div>
+            <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 0 4px 12px", WebkitTapHighlightColor:"transparent" }}>
+              <Icon name="X" size={22} color="var(--ink)" sw={2}/>
+            </button>
           </div>
-          <button onClick={() => setShowGlossary(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:4 }}>
-            <Icon name="Info" size={20} color="var(--ink2)" sw={2}/>
-          </button>
         </div>
 
         {it && (
-          <div style={{ overflowY:"auto", height:"calc(100% - 80px)", padding:"4px 20px 50px" }}>
-
-            <div style={{ marginTop:6 }}>
-              <div style={{ fontSize:10, fontWeight:600, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)", marginBottom:8 }}>Rest Between Sets</div>
-              <div style={{ background:"#FFFFFF", borderRadius:14, padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", border:"1px solid var(--line)" }}>
-                <span style={{ fontSize:13, color:"var(--ink2)" }}>Rest time</span>
-                <ScrubValue value={it.restSec ?? 90} field="restSec" idx={itemId} onUpdate={updateItem} fontSize={22} showUnit="s"/>
+          <div style={{ flexShrink:0, background:"#fff", margin:"0 16px 14px", borderRadius:18, border:"1px solid var(--line)", overflow:"hidden" }}>
+            <div style={{ display:"flex", alignItems:"stretch" }}>
+              <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"20px 0 16px", gap:10 }}>
+                <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)" }}>Sets</div>
+                <ScrubValue value={it.sets} field="sets" idx={itemId} onUpdate={updateItem} fontSize={44}/>
+              </div>
+              <div style={{ width:1, background:"var(--line)", margin:"16px 0" }}/>
+              <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"20px 0 16px", gap:10 }}>
+                <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)" }}>
+                  {(it.ex.type === "timed" || it.durSec) ? "Secs" : "Reps"}
+                </div>
+                {(it.ex.type === "timed" || it.durSec)
+                  ? <ScrubValue value={it.durSec||0} field="durSec" idx={itemId} onUpdate={updateItem} fontSize={44} showUnit="s"/>
+                  : <ScrubValue value={it.reps||0} field="reps" idx={itemId} onUpdate={updateItem} fontSize={44}/>
+                }
+              </div>
+              <div style={{ width:1, background:"var(--line)", margin:"16px 0" }}/>
+              <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"20px 0 16px", gap:10 }}>
+                <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)" }}>Rest</div>
+                <ScrubValue value={it.restSec ?? 90} field="restSec" idx={itemId} onUpdate={updateItem} fontSize={44} showUnit="s"/>
               </div>
             </div>
+          </div>
+        )}
 
-            <div style={{ marginTop:20 }}>
-              <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:8 }}>
-                <div style={{ fontSize:10, fontWeight:600, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)" }}>Technique</div>
-                <button
-                  onClick={() => setShowGlossary(true)}
-                  style={{ background:"none", border:"none", cursor:"pointer", padding:2, display:"flex", alignItems:"center", gap:3, fontSize:11, color:"var(--ink3)" }}>
-                  <Icon name="Info" size={12} color="var(--ink3)" sw={2}/>
-                </button>
-              </div>
-              <button
-                onClick={() => setTechMenuOpen(true)}
-                style={{
-                  width:"100%", padding:"12px 14px",
-                  background:"#FFFFFF", border:"1px solid var(--line)", borderRadius:12,
-                  cursor:"pointer",
-                  display:"flex", alignItems:"center", justifyContent:"space-between",
-                  fontFamily:"var(--f-os)", fontSize:14, fontWeight:600,
-                  letterSpacing:"0.04em", textTransform:"uppercase",
-                  color: currentTechId === "normal" ? "var(--ink2)" : "var(--blue)",
-                }}>
+        {it && (
+          <div style={{ flex:1, overflowY:"auto", padding:"0 16px 40px", WebkitOverflowScrolling:"touch" }}>
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)", marginBottom:8 }}>Technique</div>
+              <button onClick={() => setTechMenuOpen(true)}
+                style={{ width:"100%", padding:"13px 16px", background:"#fff", border:"1px solid var(--line)", borderRadius:14, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", fontFamily:"var(--f-os)", fontSize:15, fontWeight:600, letterSpacing:"0.04em", textTransform:"uppercase", color:currentTechId==="normal"?"var(--ink2)":"var(--blue)", WebkitTapHighlightColor:"transparent" }}>
                 <span>{techById(currentTechId).label}</span>
-                <Icon name="ChevronRight" size={14} color={currentTechId === "normal" ? "var(--ink3)" : "var(--blue)"} sw={2.2}/>
+                <Icon name="ChevronRight" size={15} color={currentTechId==="normal"?"var(--ink3)":"var(--blue)"} sw={2.2}/>
               </button>
             </div>
-
-            <div style={{ marginTop:20 }}>
+            <div style={{ marginBottom:20 }}>
               <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:8 }}>
-                <div style={{ fontSize:10, fontWeight:600, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)" }}>Sets</div>
+                <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)" }}>Per Set</div>
                 <div style={{ fontSize:11, color:"var(--ink3)" }}>Swipe to delete</div>
               </div>
-              <SetsList
-                itemId={itemId}
-                items={items}
-                updateSetField={updateSetField}
-                deleteSet={deleteSet}
-                addSet={addSet}
-              />
+              <SetsList itemId={itemId} items={items} updateSetField={updateSetField} deleteSet={deleteSet} addSet={addSet}/>
             </div>
-
-            <div style={{ marginTop:22 }}>
-              <div style={{ fontSize:10, fontWeight:600, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)", marginBottom:8 }}>Pair With Another Exercise</div>
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)", marginBottom:8 }}>Pair With Another Exercise</div>
               <div style={{ display:"flex", gap:10 }}>
-                <button onClick={startMakeSuperset}
-                  style={{ flex:1, padding:"13px 12px", background:"#FFFFFF", border:"1px solid var(--line)", borderRadius:14, cursor:"pointer", fontFamily:"var(--f-os)", fontSize:12, fontWeight:700, color:"var(--ink)", textTransform:"uppercase", letterSpacing:"0.06em" }}>
-                  Make Superset
-                </button>
-                <button onClick={startMakeCircuit}
-                  style={{ flex:1, padding:"13px 12px", background:"#FFFFFF", border:"1px solid var(--line)", borderRadius:14, cursor:"pointer", fontFamily:"var(--f-os)", fontSize:12, fontWeight:700, color:"var(--ink)", textTransform:"uppercase", letterSpacing:"0.06em" }}>
-                  Make Circuit
-                </button>
+                <button onClick={startMakeSuperset} style={{ flex:1, padding:"14px 10px", background:"#fff", border:"1px solid var(--line)", borderRadius:14, cursor:"pointer", fontFamily:"var(--f-os)", fontSize:12, fontWeight:700, color:"var(--ink)", textTransform:"uppercase", letterSpacing:"0.06em", WebkitTapHighlightColor:"transparent" }}>Make Superset</button>
+                <button onClick={startMakeCircuit} style={{ flex:1, padding:"14px 10px", background:"#fff", border:"1px solid var(--line)", borderRadius:14, cursor:"pointer", fontFamily:"var(--f-os)", fontSize:12, fontWeight:700, color:"var(--ink)", textTransform:"uppercase", letterSpacing:"0.06em", WebkitTapHighlightColor:"transparent" }}>Make Circuit</button>
               </div>
             </div>
-
-            <div style={{ height:24 }}/>
           </div>
         )}
       </div>
 
-      <TechniqueMenu
-        open={techMenuOpen}
-        currentId={currentTechId}
-        onPick={handleTechPick}
-        onClose={() => setTechMenuOpen(false)}
-      />
-
+      <TechniqueMenu open={techMenuOpen} currentId={currentTechId} onPick={handleTechPick} onClose={() => setTechMenuOpen(false)}/>
       <GlossarySheet open={showGlossary} onClose={() => setShowGlossary(false)}/>
     </>
   );
@@ -2249,7 +2233,7 @@ const GroupEditor = ({ open, primaryId, items, openCatalog, workoutName, updateI
                 cursor:"pointer", color:"var(--ink2)",
                 fontFamily:"var(--f-os)", fontSize:12, fontWeight:600,
                 letterSpacing:"0.14em", textTransform:"uppercase",
-                marginBottom: 22, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                marginBottom: 22, display:"flex", alignItems:"center", justifyContent:"center",
               }}>
               <Icon name="Plus" size={13} color="var(--ink2)" sw={2.2}/>
               Add Exercise
@@ -2321,7 +2305,8 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
   // Delete poof state
   const [deletingKey, setDeletingKey] = useState(null);
 
-  const CARD_HEIGHT = 92;
+  const CARD_HEIGHT = 86;
+  const swipeBackRef = useRef(null);
 
   useEffect(() => {
     if (workout) {
@@ -2725,12 +2710,7 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
     if (rit.type === 'group') {
       setGroupEditorFor(rit.primaryId);
     } else {
-      openCatalog({
-        mode: "single",
-        title: `Swap ${rit.item.ex.name}`,
-        excludeNames: items.filter(it => it.id !== rit.item.id).map(it => it.ex.name),
-        onPick: (ce) => { swapItem(rit.item.id, ce); },
-      });
+      setAdvancedFor(rit.item.id);
     }
   };
 
@@ -2747,7 +2727,24 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
   };
 
   return (
-    <div className={`push ${open?"on":""}`} style={{ background:"#E5E6E9" }}>
+    <div
+      className={`push ${open?"on":""}`}
+      style={{ background:"#E5E6E9" }}
+      onTouchStart={(e) => {
+        if (advancedFor !== null || groupEditorFor !== null || catalogState.open) return;
+        const t = e.touches[0];
+        if (t.clientX > 24) return;
+        swipeBackRef.current = { x: t.clientX, y: t.clientY };
+      }}
+      onTouchMove={(e) => {
+        if (!swipeBackRef.current) return;
+        const t = e.touches[0];
+        const dx = t.clientX - swipeBackRef.current.x;
+        const dy = Math.abs(t.clientY - swipeBackRef.current.y);
+        if (dx > 44 && dy < 40) { swipeBackRef.current = null; onClose(); }
+      }}
+      onTouchEnd={() => { swipeBackRef.current = null; }}
+    >
 
       <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", zIndex:0, pointerEvents:"none" }}
            viewBox="0 0 393 852" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
@@ -2771,13 +2768,6 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
 
       <SBar/>
       <div style={{ position:"absolute", top:"var(--safe-top)", left:0, right:0, bottom:0, zIndex:1 }}>
-
-        <div style={{ padding:"10px 20px 0" }}>
-          <button onClick={onClose} className="tap" style={{ display:"flex", alignItems:"center", gap:3, background:"none", border:"none", cursor:"pointer" }}>
-            <Icon name="ChevronLeft" size={18} color="var(--ink)" sw={2.2}/>
-            <span style={{ fontSize:14, color:"var(--ink)", fontWeight:500 }}>Today</span>
-          </button>
-        </div>
 
         <div className="scroll notab">
 
@@ -2831,7 +2821,7 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
               {(items.length > 0 ? computeBroadMuscles(items) : workout.muscles).join("  ·  ") || "—"}
             </div>
             <div style={{ marginTop:14, fontSize:10, color:"var(--ink3)", fontStyle:"italic" }}>
-              Hold &amp; drag to reorder &nbsp;·&nbsp; Swipe left to delete &nbsp;·&nbsp; Tap name to rename
+              Tap to edit &nbsp;·&nbsp; SWAP to replace &nbsp;·&nbsp; Hold to reorder &nbsp;·&nbsp; Swipe to delete
             </div>
           </div>
 
@@ -2862,6 +2852,8 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
                   className={deletingKey === rit.key ? 'card-poof' : ''}
                   style={{
                     position:"relative", marginBottom: 9,
+                    borderRadius: 18,
+                    overflow: isDragging ? "visible" : "hidden",
                     transform: isDragging
                       ? `translateY(${dragOffsetY}px) scale(1.04)`
                       : (displaceY !== 0 ? `translateY(${displaceY}px)` : undefined),
@@ -2900,50 +2892,51 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
                     }}
                   >
                     {isStandalone ? (
-                      <div style={{
-                        background:"var(--white)", borderRadius:18,
-                        border:"2px solid var(--ink)",
-                        boxShadow:"0 3px 14px rgba(10,10,15,0.08)",
-                        cursor:"pointer", overflow:"hidden",
-                      }}>
-                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"11px 14px 0" }}>
-                          <div style={{ fontFamily:"var(--f-os)", fontSize:16, fontWeight:500, textTransform:"uppercase", color:"var(--ink)", letterSpacing:"0.04em" }}>
-                            {rit.item.ex.name}
-                          </div>
-                        </div>
-
-                        <div style={{ height:1, background:"var(--line)", margin:"9px 14px 0" }} />
-
-                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"5px 14px 7px 12px" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:0 }}>
-                            <ScrubValue value={rit.item.sets} field="sets" idx={rit.item.id} onUpdate={updateItem} fontSize={19}/>
-                            <span style={{ fontSize:12, color:"var(--ink3)", padding:"0 2px" }}>×</span>
-                            {(rit.item.ex.type === "timed" || !!rit.item.durSec)
-                              ? <ScrubValue value={rit.item.durSec||0} field="durSec" idx={rit.item.id} onUpdate={updateItem} fontSize={19} showUnit="s"/>
-                              : <ScrubValue value={rit.item.reps||0} field="reps" idx={rit.item.id} onUpdate={updateItem} fontSize={19}/>
-                            }
-                            <span style={{ fontSize:12, color:"var(--ink3)", padding:"0 6px" }}>·</span>
-                            <ScrubValue value={rit.item.restSec ?? 90} field="restSec" idx={rit.item.id} onUpdate={updateItem} fontSize={14} showUnit="s"/>
-                            <span style={{ fontSize:10, color:"var(--ink3)", marginLeft:2 }}>rest</span>
-                          </div>
-                          <button
-                            data-interactive="true"
-                            onClick={(ev) => { ev.stopPropagation(); setAdvancedFor(rit.item.id); }}
-                            style={{
-                              background:"none", border:"none", cursor:"pointer", padding:"4px 0",
-                              display:"flex", alignItems:"center",
-                            }}
-                            aria-label="Advanced">
-                            <Icon name="ChevronRight" size={15} color="var(--ink)" sw={2.6}/>
-                            <span style={{ display:"inline-flex", marginLeft:-7 }}>
-                              <Icon name="ChevronRight" size={15} color="var(--ink)" sw={2.6}/>
-                            </span>
-                            <span style={{ display:"inline-flex", marginLeft:-7 }}>
-                              <Icon name="ChevronRight" size={15} color="var(--ink)" sw={2.6}/>
-                            </span>
-                          </button>
-                        </div>
-                      </div>
+                       <div style={{
+                         background:"var(--white)", borderRadius:18,
+                         border:"2px solid var(--ink)",
+                         boxShadow:"0 4px 16px rgba(10,10,15,0.10)",
+                         cursor:"pointer",
+                         display:"flex", alignItems:"stretch",
+                         minHeight:86, overflow:"hidden",
+                       }}>
+                         {/* Left: name + muscle */}
+                         <div style={{ flex:1, padding:"16px 10px 16px 18px", display:"flex", flexDirection:"column", justifyContent:"center", gap:3 }}>
+                           <div style={{ fontFamily:"var(--f-os)", fontSize:17, fontWeight:600, textTransform:"uppercase", color:"var(--ink)", letterSpacing:"0.04em", lineHeight:1.2 }}>
+                             {rit.item.ex.name}
+                           </div>
+                           {rit.item.ex.muscles && rit.item.ex.muscles[0] ? (
+                             <div style={{ fontSize:12, color:"var(--ink3)", fontFamily:"var(--f-sys)" }}>
+                               {rit.item.ex.muscles[0]}
+                             </div>
+                           ) : null}
+                         </div>
+                         {/* Soft divider */}
+                         <div style={{ width:1, background:"var(--line)", margin:"14px 0" }}/>
+                         {/* Right: metric summary + SWAP */}
+                         <div style={{ width:120, padding:"14px 14px 14px 12px", display:"flex", flexDirection:"column", justifyContent:"center", gap:4, background:"rgba(10,10,15,0.02)" }}>
+                           <div style={{ fontFamily:"var(--f-os)", fontSize:22, fontWeight:700, color:"var(--ink)", lineHeight:1 }}>
+                             {rit.item.sets} × {(rit.item.ex.type === "timed" || rit.item.durSec) ? `${rit.item.durSec||0}s` : (rit.item.reps || "—")}
+                           </div>
+                           <div style={{ fontSize:12, color:"var(--ink3)", fontFamily:"var(--f-sys)" }}>
+                             {(rit.item.restSec ?? 90)}s rest
+                           </div>
+                           <button
+                             data-interactive="true"
+                             onClick={(ev) => {
+                               ev.stopPropagation();
+                               openCatalog({
+                                 mode:"single",
+                                 title:`Swap ${rit.item.ex.name}`,
+                                 excludeNames: items.filter(x => x.id !== rit.item.id).map(x => x.ex.name),
+                                 onPick: (ce) => swapItem(rit.item.id, ce),
+                               });
+                             }}
+                             style={{ marginTop:6, alignSelf:"flex-start", background:"var(--ink)", color:"#fff", border:"none", borderRadius:6, padding:"5px 9px", fontFamily:"var(--f-os)", fontSize:10, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", cursor:"pointer", WebkitTapHighlightColor:"transparent" }}>
+                             SWAP
+                           </button>
+                         </div>
+                       </div>
                     ) : (
                       // GROUP CARD — left blue bar is the only blue; labels use ink/ink2
                       <div style={{
@@ -3012,15 +3005,14 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
                 },
               })}
               style={{
-                width:"100%", marginTop:14, padding:"16px",
+                width:"100%", marginTop:14, padding:"20px 16px",
                 background:"transparent", border:"2px dashed var(--ink3)", borderRadius:18,
                 cursor:"pointer", color:"var(--ink)",
                 fontFamily:"var(--f-os)", fontSize:13, fontWeight:700,
                 letterSpacing:"0.14em", textTransform:"uppercase",
-                display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                display:"flex", alignItems:"center", justifyContent:"center",
               }}>
-              <Icon name="Plus" size={15} color="var(--ink)" sw={2.2}/>
-              Add Exercise
+              ADD EXERCISE
             </button>
           </div>
 

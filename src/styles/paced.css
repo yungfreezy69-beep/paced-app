@@ -194,6 +194,7 @@ body {
   flex-shrink: 0;
   position: relative;
   z-index: 10;
+  background: transparent; /* always transparent — wallpaper shows behind it */
 }
 
 /* ── SCREEN AREA ──────────────────────────────────────────────────────────── */
@@ -237,7 +238,7 @@ body {
   padding: 4px 20px;
   cursor: pointer; user-select: none;
   color: var(--ink3);
-  transition: color 0.18s ease;
+  transition: color 0.14s ease;
   -webkit-tap-highlight-color: transparent;
 }
 .tab.on { color: var(--blue); }
@@ -347,6 +348,25 @@ body {
   overflow: hidden;
 }
 .push.on { transform: translateX(0); }
+
+
+/* ── FULLSCREEN PUSH (CatalogScreen) ─────────────────────────────────────── */
+/* Dedicated class for Catalog — z-300 ensures it is above GroupEditor (z-110)
+   and AdvancedSheet (z-26) within WorkoutDetail's stacking context.
+   Closed state has pointer-events:none so off-screen it is truly inert. */
+.fullscreen-push {
+  position: absolute; inset: 0;
+  z-index: 300;
+  background: #E5E6E9;
+  overflow: hidden;
+  transform: translateX(100%);
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  pointer-events: none;
+}
+.fullscreen-push.on {
+  transform: translateX(0);
+  pointer-events: auto;
+}
 
 /* ── EXPAND ───────────────────────────────────────────────────────────────── */
 .expand {
