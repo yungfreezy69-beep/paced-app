@@ -11,6 +11,7 @@
         respect it. Acceptable for a prototype/app preview context.
      3. When Paced moves to React Native, this meta tag goes away entirely. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#E5E6E9">
 <title>Paced</title>
@@ -248,6 +249,62 @@ const buildSuggestions = (workoutName, excludeNames, max = 6) => {
     if (results.length >= max) break;
   }
   return results;
+};
+
+/* Build SWAP-specific suggestions given a source exercise.
+   Ranks candidates by how closely they match the exercise being replaced:
+     +10  same specific tab (e.g. Quads → Quads)
+     +6   same broad group (Legs → Legs)
+     +3   same base movement family
+     +2   same equipment type
+     +1   shared muscle in muscles[]
+   Excludes anything already in the workout. Returns up to `max` items. */
+const buildSwapSuggestions = (sourceItem, excludeNames, max = 6) => {
+  if (!sourceItem || !sourceItem.ex) return [];
+  const src = sourceItem.ex;
+  const srcName = src.name;
+  const srcTab = src.tab || (src.muscles && src.muscles[0]) || null;     // specific tab (Quads, Lats…)
+  const srcBroad = srcTab ? (BROAD_TAB_FROM_SPECIFIC[srcTab] || srcTab) : null;  // broad (Legs, Back…)
+  const srcEquip = src.equipment || null;
+  const srcMuscles = new Set(src.muscles || []);
+  const excludeSet = new Set([srcName, ...(excludeNames || [])]);
+
+  /* Candidate pool: all exercises in the same broad group, falling back to all rows */
+  const candidateIndices = srcBroad && CATALOG_BY_BROAD[srcBroad]
+    ? CATALOG_BY_BROAD[srcBroad]
+    : CATALOG_BUNDLE.rows.map((_, i) => i);
+
+  const scored = [];
+  for (const i of candidateIndices) {
+    const c = unpackCatalog(i);
+    if (!c || excludeSet.has(c.name)) continue;
+
+    let score = 0;
+    if (srcTab && c.tab === srcTab)             score += 10;
+    if (srcBroad && (BROAD_TAB_FROM_SPECIFIC[c.tab] || c.tab) === srcBroad) score += 6;
+    if (sourceItem.ex.base && c.base === sourceItem.ex.base) score += 3;
+    if (srcEquip && c.equipment === srcEquip)   score += 2;
+    /* shared muscle (1 point each, capped at 3) */
+    if (srcMuscles.size && c.muscles) {
+      let shared = 0;
+      for (const m of c.muscles) if (srcMuscles.has(m)) shared++;
+      score += Math.min(shared, 3);
+    }
+    if (score > 0) scored.push([c, score]);
+  }
+  scored.sort((a, b) => b[1] - a[1]);
+  return scored.slice(0, max).map(x => x[0]);
+};
+
+/* Pull unique setup/variation values from the catalog for the filter panel.
+   "Setup" in catalog data = stance/grip/angle variation (Seated, Incline, Wide-Grip…).
+   This is distinct from Advanced Editor "technique" (Drop Set, Rest-Pause…). */
+const getCatalogSetupOptions = () => {
+  const set = new Set();
+  for (const s of CATALOG_BUNDLE.setups) {
+    if (s && s.trim()) set.add(s);
+  }
+  return Array.from(set).sort();
 };
 
 /* Convert a catalog entry into an `ex` object matching EX shape. Used by WorkoutDetail handlers. */
@@ -714,98 +771,97 @@ const CatalogRow = ({ ex, isMulti, selected, inWorkout, onTap }) => (
 );
 
 /* ── CATALOG SCREEN ── */
-const CatalogScreen = ({ open, mode, title, excludeNames = [], workoutName = "", onPick, onConfirm, onClose }) => {
-  const defaultTab = (() => {
-    const list = broadTabsForWorkoutName(workoutName);
-    return (list && list.length > 0 && CATALOG_BROAD_TABS.includes(list[0])) ? list[0] : "Chest";
-  })();
+const CatalogScreen = ({ open, mode, title, subtitle = "", sourceItem = null, excludeNames = [], workoutName = "", onPick, onConfirm, onClose }) => {
+  const [query, setQuery]                   = useState("");
+  const [selected, setSelected]             = useState([]);
+  const [showFilters, setShowFilters]       = useState(false);
+  const [muscleFilter, setMuscleFilter]     = useState(null);
+  const [equipmentFilter, setEquipmentFilter] = useState(null);
+  const [setupFilter, setSetupFilter]       = useState(null);
 
-  const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState(defaultTab);
-  const [activeSub, setActiveSub] = useState(0);
-  const [activeEq, setActiveEq] = useState(0);
-  const [selected, setSelected] = useState([]);
-
-  const tabRefs = useRef({});
-  const subRefs = useRef({});
   const bodyRef = useRef(null);
 
-  // Reset state each time the screen opens
+  // Reset state each time the screen opens. Pre-fill muscle filter from source
+  // exercise (SWAP) or workout's broad group (Add Exercise) so the All section
+  // lands on relevant results immediately. User can clear via the filter sheet.
   useEffect(() => {
     if (open) {
       setQuery("");
-      setActiveTab(defaultTab);
-      setActiveSub(0);
-      setActiveEq(0);
       setSelected([]);
+      setShowFilters(false);
+      setEquipmentFilter(null);
+      setSetupFilter(null);
+      if (sourceItem && sourceItem.ex) {
+        const srcTab = sourceItem.ex.tab || (sourceItem.ex.muscles && sourceItem.ex.muscles[0]);
+        const broad = srcTab ? (BROAD_TAB_FROM_SPECIFIC[srcTab] || srcTab) : null;
+        setMuscleFilter(broad && CATALOG_BROAD_TABS.includes(broad) ? broad : null);
+      } else {
+        const list = broadTabsForWorkoutName(workoutName);
+        setMuscleFilter(list && list.length > 0 && CATALOG_BROAD_TABS.includes(list[0]) ? list[0] : null);
+      }
     }
-  }, [open, defaultTab]);
+  }, [open]);
 
-  // Reset sub-filter when broad tab changes; scroll body to top on any filter change
-  useEffect(() => { setActiveSub(0); }, [activeTab]);
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = 0;
-  }, [activeTab, activeSub, activeEq, query]);
-
-  // Auto-scroll the active tab into view
-  useEffect(() => {
-    if (!open) return;
-    const el = tabRefs.current[activeTab];
-    if (el && el.scrollIntoView) {
-      requestAnimationFrame(() => {
-        el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-      });
-    }
-  }, [activeTab, open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const el = subRefs.current[activeSub];
-    if (el && el.scrollIntoView) {
-      requestAnimationFrame(() => {
-        el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-      });
-    }
-  }, [activeSub, activeTab, open]);
+  }, [query, muscleFilter, equipmentFilter, setupFilter]);
 
   const isMulti = mode === "multi";
   const excludeSet = new Set(excludeNames);
-  const subs = BROAD_SUBS[activeTab] || [{ name: "All", fn: () => true }];
-  const currentSubFn = subs[activeSub]?.fn || (() => true);
-  const currentEqFn = EQUIPMENT_GROUPS[activeEq]?.match || (() => true);
 
-  // Compute visible indices
+  const eqMatch = (c) => {
+    if (!equipmentFilter) return true;
+    const group = EQUIPMENT_GROUPS.find(g => g.name === equipmentFilter);
+    return group ? group.match(c) : true;
+  };
+  const setupMatch  = (c) => !setupFilter  || c.setup === setupFilter;
+  const muscleMatch = (c) => {
+    if (!muscleFilter) return true;
+    const broad = BROAD_TAB_FROM_SPECIFIC[c.tab] || c.tab;
+    return broad === muscleFilter;
+  };
+
   const visibleIndices = (() => {
     const q = query.trim();
-    const searchResult = q ? buildSearchMatcher(q) : null;
-
-    if (searchResult) {
-      const { matcher, scorer } = searchResult;
-      // Collect ALL matches first, then sort by relevance.
-      // Primary-muscle matches rank above secondary/equipment hits so that
-      // "lats" returns lat-focused exercises before ones that merely use lats
-      // as a stabilizer.
+    if (q) {
+      const sr = buildSearchMatcher(q);
+      if (!sr) return [];
+      const { matcher, scorer } = sr;
       const scored = [];
       for (let i = 0; i < CATALOG_BUNDLE.rows.length; i++) {
         const c = unpackCatalog(i);
         if (!matcher(c)) continue;
-        if (activeEq !== 0 && !currentEqFn(c)) continue;
+        if (!muscleMatch(c) || !eqMatch(c) || !setupMatch(c)) continue;
         scored.push([i, scorer(c)]);
       }
       scored.sort((a, b) => b[1] - a[1]);
       return scored.slice(0, 250).map(x => x[0]);
     }
-
-    // No query — apply broad tab + sub-filter + equipment
-    let list = CATALOG_BY_BROAD[activeTab] || [];
-    if (activeSub !== 0) list = list.filter(i => currentSubFn(unpackCatalog(i)));
-    if (activeEq !== 0) list = list.filter(i => currentEqFn(unpackCatalog(i)));
+    let list = muscleFilter && CATALOG_BY_BROAD[muscleFilter]
+      ? CATALOG_BY_BROAD[muscleFilter]
+      : Array.from({ length: CATALOG_BUNDLE.rows.length }, (_, i) => i);
+    if (equipmentFilter || setupFilter) {
+      list = list.filter(i => {
+        const c = unpackCatalog(i);
+        return c && eqMatch(c) && setupMatch(c);
+      });
+    }
     return list;
   })();
 
-  // Suggestions visible only on default state
-  const showSuggestions = !query && activeTab === defaultTab && activeSub === 0 && activeEq === 0;
-  const suggestions = showSuggestions ? buildSuggestions(workoutName, excludeNames, 5) : [];
+  const renderLimit = 80;
+  const renderList  = visibleIndices.slice(0, renderLimit);
+  const overflow    = visibleIndices.length - renderList.length;
+
+  const showSuggestions = !query && !equipmentFilter && !setupFilter;
+  const suggestions = showSuggestions
+    ? (sourceItem
+        ? buildSwapSuggestions(sourceItem, excludeNames, 6)
+        : buildSuggestions(workoutName, excludeNames, 6))
+    : [];
+
+  const activeFilterCount = (muscleFilter ? 1 : 0) + (equipmentFilter ? 1 : 0) + (setupFilter ? 1 : 0);
+  const setupOptions = getCatalogSetupOptions();
 
   const toggle = (id) => {
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -819,210 +875,320 @@ const CatalogScreen = ({ open, mode, title, excludeNames = [], workoutName = "",
     if (picked.length > 0 && onConfirm) onConfirm(picked);
     onClose();
   };
+  const clearFilters = () => {
+    setMuscleFilter(null);
+    setEquipmentFilter(null);
+    setSetupFilter(null);
+  };
 
-  const visibleCap = 200;
-  const overflow = visibleIndices.length > visibleCap ? visibleIndices.length - visibleCap : 0;
-  const renderList = visibleIndices.slice(0, visibleCap);
+  // Row component for both Suggested and All sections
+  const Row = ({ ex, sectionKey }) => (
+    <div key={`${sectionKey}-${ex.id}`} onClick={() => handleTap(ex)}
+      style={{
+        display:"flex", alignItems:"center", gap:12,
+        padding:"15px 20px", cursor:"pointer",
+        borderBottom:"1px solid var(--line)",
+        background: selected.includes(ex.id) ? "rgba(47,111,237,0.05)" : "transparent",
+      }}>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontSize:18, fontWeight:600, color:"var(--ink)", lineHeight:1.3, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+          {ex.name}
+        </div>
+        <div style={{ fontSize:14, color:"var(--ink3)", marginTop:3, lineHeight:1.4 }}>
+          {ex.primary}{ex.equipment ? ` \u00b7 ${ex.equipment}` : ""}
+          {excludeSet.has(ex.name) && (
+            <span style={{ marginLeft:8, color:"var(--blue)" }}>\u00b7 already added</span>
+          )}
+        </div>
+      </div>
+      {isMulti ? (
+        <div style={{
+          width:24, height:24, borderRadius:12, flexShrink:0,
+          background: selected.includes(ex.id) ? "var(--blue)" : "transparent",
+          border:    selected.includes(ex.id) ? "none" : "1.5px solid var(--ink3)",
+          display:"flex", alignItems:"center", justifyContent:"center",
+        }}>
+          {selected.includes(ex.id) && <Icon name="Check" size={14} color="#fff" sw={3}/>}
+        </div>
+      ) : (
+        <Icon name="ChevronRight" size={16} color="var(--ink3)" sw={2}/>
+      )}
+    </div>
+  );
 
-  // System sans for body, Oswald reserved for the top title
-  const BODY_FONT = '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif';
-  const sectionLabel = query
-    ? `${visibleIndices.length} result${visibleIndices.length !== 1 ? 's' : ''}`
-    : (activeSub === 0 ? `All ${activeTab}` : `${activeTab} · ${subs[activeSub].name}`);
+  const resolvedTitle    = title || (isMulti ? "Add Exercises" : "Swap Exercise");
+  const allSectionLabel  = muscleFilter ? `All \u00b7 ${muscleFilter}` : "All";
+  const suggestionLabel  = sourceItem ? "Suggested Swaps" : `Suggested for ${workoutName || "Workout"}`;
 
   return (
-    <div className={`fullscreen-push ${open?"on":""}`} style={{ fontFamily: BODY_FONT }}>
+    <div className={`fullscreen-push ${open?"on":""}`}>
 
-      {/* Topographic wallpaper — same family as Today / Full Details */}
+      {/* Topographic wallpaper */}
       <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", zIndex:0, pointerEvents:"none" }}
            viewBox="0 0 393 852" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
         <defs>
           <filter id="pcc" x="-30%" y="-30%" width="160%" height="160%">
             <feDropShadow dx="1.5" dy="4" stdDeviation="5.5" flood-color="#8C8E96" flood-opacity="0.17"/>
           </filter>
-          <filter id="pccs" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="1" dy="2.5" stdDeviation="4" flood-color="#8C8E96" flood-opacity="0.13"/>
-          </filter>
         </defs>
-        <path d="M -10 -10 L -10 268 C 28 248 78 268 110 240 C 142 212 130 162 162 134 C 194 106 226 124 240 96 C 254 68 218 30 168 8 C 118 -14 30 -10 -10 -10 Z"
-              fill="#EDEEF2" filter="url(#pcc)"/>
-        <path d="M 240 -10 L 403 -10 L 403 22 C 380 26 350 48 330 78 C 310 108 320 148 300 178 C 280 208 244 192 226 226 C 208 260 226 296 252 314 C 246 280 246 220 250 168 C 254 116 246 50 240 -10 Z"
-              fill="#F0F0F3" filter="url(#pcc)"/>
-        <path d="M -10 195 L -10 312 C 40 300 95 320 120 296 C 142 274 120 246 120 222 C 120 206 80 196 50 196 C 30 196 5 198 -10 195 Z"
-              fill="#F2F2F5" filter="url(#pccs)"/>
-        <path d="M 285 248 C 305 230 333 235 340 256 C 347 277 333 298 312 295 C 291 292 273 268 285 248 Z"
-              fill="#F4F4F7" filter="url(#pccs)"/>
+        <path d="M -10 -10 L -10 268 C 28 248 78 268 110 240 C 142 212 130 162 162 134 C 194 106 226 124 240 96 C 254 68 218 30 168 8 C 118 -14 30 -10 -10 -10 Z" fill="#EDEEF2" filter="url(#pcc)"/>
+        <path d="M 240 -10 L 403 -10 L 403 22 C 380 26 350 48 330 78 C 310 108 320 148 300 178 C 280 208 244 192 226 226 C 208 260 226 296 252 314 C 246 280 246 220 250 168 C 254 116 246 50 240 -10 Z" fill="#F0F0F3" filter="url(#pcc)"/>
       </svg>
 
       <SBar/>
 
-      {/* Inner column. zIndex:1 floats over the SVG wallpaper. */}
+      {/* Inner column */}
       <div style={{
         position:"absolute", top:"var(--safe-top)", left:0, right:0, bottom:0,
         display:"flex", flexDirection:"column", zIndex:1,
       }}>
 
-        {/* Header: back + selection count */}
+        {/* Top bar: close + selection count */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-                      padding:"6px 14px 4px 10px", flexShrink: 0 }}>
+                      padding:"6px 14px 0 8px", flexShrink:0 }}>
           <button onClick={onClose} className="tap"
-            style={{ display:"flex", alignItems:"center", gap:2, background:"none", border:"none",
-                     cursor:"pointer", padding:"6px 8px" }}>
-            <Icon name="ChevronLeft" size={20} color="var(--ink)" sw={2.2}/>
-            <span style={{ fontSize:15, color:"var(--ink)", fontWeight:500 }}>Back</span>
+            style={{ display:"flex", alignItems:"center", gap:4, background:"none", border:"none",
+                     cursor:"pointer", padding:"8px 10px", WebkitTapHighlightColor:"transparent" }}>
+            <Icon name="ChevronLeft" size={22} color="var(--ink)" sw={2.4}/>
+            <span style={{ fontSize:16, color:"var(--ink)", fontWeight:500 }}>Back</span>
           </button>
           {isMulti && selected.length > 0 ? (
-            <span style={{ fontSize:12, fontWeight:600, color:"var(--blue)" }}>
+            <span style={{ fontSize:13, fontWeight:600, color:"var(--blue)", padding:"8px 12px" }}>
               {selected.length} selected
             </span>
           ) : (
-            <div style={{ width:60 }}/>
+            <div style={{ width:50 }}/>
           )}
         </div>
 
-        {/* Centered title — OSWALD, uppercase */}
-        <div style={{ padding:"6px 20px 14px", textAlign:"center", flexShrink: 0 }}>
+        {/* Title + thick underline + optional subtitle */}
+        <div style={{ padding:"2px 20px 16px", textAlign:"center", flexShrink:0 }}>
           <h1 style={{
-            margin:0,
-            fontFamily:"var(--f-os)",
-            fontSize:28, fontWeight:700,
-            textTransform:"uppercase",
-            color:"var(--ink)",
-            letterSpacing:"0.02em", lineHeight:1.0,
+            margin:0, fontFamily:"var(--f-os)",
+            fontSize:"clamp(38px, 11vw, 50px)",
+            fontWeight:700, textTransform:"uppercase",
+            color:"var(--ink)", letterSpacing:"0.02em", lineHeight:1.0,
           }}>
-            {title || (isMulti ? "Add Exercises" : "Add Exercise")}
+            {resolvedTitle}
           </h1>
+          <div style={{ height:3, background:"var(--ink)", width:56, margin:"10px auto 0", borderRadius:1.5 }}/>
+          {subtitle && (
+            <div style={{ fontSize:14, color:"var(--ink2)", marginTop:10, fontStyle:"italic" }}>
+              {subtitle}
+            </div>
+          )}
         </div>
 
-        {/* Search */}
-        <div style={{ padding:"0 20px 12px", flexShrink: 0 }}>
-          <SearchInput value={query} onChange={setQuery} placeholder="Search name, muscle, equipment"/>
-        </div>
-
-        {/* Broad tabs (hidden during search) */}
-        {!query && (
-          <TabStrip tabs={CATALOG_BROAD_TABS} active={activeTab} onSelect={setActiveTab} tabRefs={tabRefs}/>
-        )}
-
-        {/* Exact-muscle sub-filter (hidden during search) */}
-        {!query && subs.length > 1 && (
-          <SubFilterStrip filters={subs} activeIdx={activeSub} onSelect={setActiveSub} refsHolder={subRefs}/>
-        )}
-
-        {/* Equipment strip — always visible */}
-        <EquipmentStrip groups={EQUIPMENT_GROUPS} activeIdx={activeEq} onSelect={setActiveEq}/>
-
-        {/* BODY — solid white, scrollable */}
+        {/* Scrollable body */}
         <div ref={bodyRef} style={{
-          flex:1, minHeight:0,
-          overflowY:"auto", overflowX:"hidden",
-          background:"#FFFFFF",
+          flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden",
+          background:"#FFFFFF", borderTop:"1px solid var(--line)",
         }}>
 
-          {/* Suggestions */}
+          {/* Active filter chips bar (only when filters set) */}
+          {activeFilterCount > 0 && (
+            <div style={{ display:"flex", flexWrap:"wrap", gap:8, padding:"14px 20px 6px", borderBottom:"1px solid var(--line)" }}>
+              {muscleFilter && (
+                <div style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"6px 8px 6px 12px", background:"var(--ink)", color:"#fff", borderRadius:999, fontSize:13, fontWeight:500 }}>
+                  {muscleFilter}
+                  <button onClick={() => setMuscleFilter(null)} style={{ background:"none", border:"none", padding:2, color:"#fff", cursor:"pointer", display:"flex" }}>
+                    <Icon name="X" size={13} color="#fff" sw={2.5}/>
+                  </button>
+                </div>
+              )}
+              {equipmentFilter && (
+                <div style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"6px 8px 6px 12px", background:"var(--ink)", color:"#fff", borderRadius:999, fontSize:13, fontWeight:500 }}>
+                  {equipmentFilter}
+                  <button onClick={() => setEquipmentFilter(null)} style={{ background:"none", border:"none", padding:2, color:"#fff", cursor:"pointer", display:"flex" }}>
+                    <Icon name="X" size={13} color="#fff" sw={2.5}/>
+                  </button>
+                </div>
+              )}
+              {setupFilter && (
+                <div style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"6px 8px 6px 12px", background:"var(--ink)", color:"#fff", borderRadius:999, fontSize:13, fontWeight:500 }}>
+                  {setupFilter}
+                  <button onClick={() => setSetupFilter(null)} style={{ background:"none", border:"none", padding:2, color:"#fff", cursor:"pointer", display:"flex" }}>
+                    <Icon name="X" size={13} color="#fff" sw={2.5}/>
+                  </button>
+                </div>
+              )}
+              <button onClick={clearFilters}
+                style={{ background:"none", border:"none", padding:"6px 8px", fontSize:13, color:"var(--ink2)", cursor:"pointer", textDecoration:"underline" }}>
+                Clear all
+              </button>
+            </div>
+          )}
+
+          {/* SUGGESTED SWAPS */}
           {suggestions.length > 0 && (
             <div style={{ borderBottom:"8px solid #E5E6E9" }}>
-              <div style={{ padding:"14px 20px 6px",
-                            fontSize:11, fontWeight:600, letterSpacing:"0.18em",
+              <div style={{ padding:"18px 20px 6px",
+                            fontSize:12, fontWeight:700, letterSpacing:"0.18em",
                             textTransform:"uppercase", color:"var(--ink3)" }}>
-                Suggested for {workoutName}
+                {suggestionLabel}
               </div>
-              {suggestions.map(ex => (
-                <CatalogRow key={`sug-${ex.id}`}
-                  ex={ex}
-                  isMulti={isMulti}
-                  selected={selected.includes(ex.id)}
-                  inWorkout={excludeSet.has(ex.name)}
-                  onTap={() => handleTap(ex)}/>
-              ))}
+              {suggestions.map(ex => <Row key={`sug-${ex.id}`} ex={ex} sectionKey="sug"/>)}
             </div>
           )}
 
-          {/* Section header */}
-          <div style={{ padding:"14px 20px 6px",
-                        fontSize:11, fontWeight:600, letterSpacing:"0.18em",
+          {/* ALL section header */}
+          <div style={{ padding:"18px 20px 6px",
+                        fontSize:12, fontWeight:700, letterSpacing:"0.18em",
                         textTransform:"uppercase", color:"var(--ink3)" }}>
-            {sectionLabel}
-            {activeEq !== 0 && !query && (
-              <span style={{ color:"var(--ink3)", fontWeight:400, textTransform:"none", letterSpacing:0, marginLeft:8 }}>
-                · {EQUIPMENT_GROUPS[activeEq].name.toLowerCase()} only
-              </span>
-            )}
+            {allSectionLabel}
           </div>
 
-          {/* Empty state — POLISHED, never blank */}
-          {visibleIndices.length === 0 && (
-            <div style={{ padding:"56px 28px 40px", textAlign:"center" }}>
-              <div style={{
-                width:54, height:54, borderRadius:27, margin:"0 auto 16px",
-                background:"rgba(10,10,15,0.04)", display:"flex",
-                alignItems:"center", justifyContent:"center",
-              }}>
+          {/* Empty state */}
+          {renderList.length === 0 && (
+            <div style={{ padding:"48px 28px 32px", textAlign:"center" }}>
+              <div style={{ width:54, height:54, borderRadius:27, margin:"0 auto 14px",
+                            background:"rgba(10,10,15,0.04)", display:"flex",
+                            alignItems:"center", justifyContent:"center" }}>
                 <Icon name="Search" size={22} color="var(--ink3)" sw={2}/>
               </div>
-              <div style={{ fontSize:15, fontWeight:500, color:"var(--ink)" }}>
-                {query ? "No matches" : "Nothing in this filter"}
+              <div style={{ fontSize:16, fontWeight:500, color:"var(--ink)" }}>
+                {query ? "No matches" : "Nothing matches these filters"}
               </div>
-              <div style={{ fontSize:13, color:"var(--ink3)", marginTop:4, lineHeight:1.4 }}>
+              <div style={{ fontSize:14, color:"var(--ink3)", marginTop:6, lineHeight:1.4 }}>
                 {query
-                  ? "Try a different word, or check spelling."
-                  : (activeEq !== 0
-                      ? `Try a different equipment filter, or browse all ${activeTab.toLowerCase()}.`
-                      : `Try a different muscle.`)}
+                  ? "Try a different word, or clear filters to widen the search."
+                  : "Try clearing filters or browsing a different group."}
               </div>
             </div>
           )}
 
-          {/* List */}
+          {/* ALL list */}
           {renderList.map(id => {
             const ex = unpackCatalog(id);
             if (!ex) return null;
-            return (
-              <CatalogRow key={id}
-                ex={ex}
-                isMulti={isMulti}
-                selected={selected.includes(ex.id)}
-                inWorkout={excludeSet.has(ex.name)}
-                onTap={() => handleTap(ex)}/>
-            );
+            return <Row key={`all-${id}`} ex={ex} sectionKey="all"/>;
           })}
 
           {overflow > 0 && (
-            <div style={{ padding:"18px 20px 28px", fontSize:12, color:"var(--ink3)",
+            <div style={{ padding:"18px 20px 28px", fontSize:13, color:"var(--ink3)",
                           textAlign:"center", borderBottom:"1px solid var(--line)" }}>
-              +{overflow.toLocaleString()} more — refine your search to narrow results
+              +{overflow.toLocaleString()} more \u2014 refine your search to narrow results
             </div>
           )}
 
-          {/* Bottom safe area */}
-          <div style={{ height: isMulti ? 110 : 36 }}/>
+          {/* Bottom spacer so last row clears the sticky bar (and CTA when multi) */}
+          <div style={{ height: isMulti ? 180 : 96 }}/>
         </div>
 
         {/* Multi-select CTA */}
         {isMulti && (
           <div style={{
-            position:"absolute", left:0, right:0, bottom:0,
-            padding:"14px 20px 28px",
-            background:"linear-gradient(to top, #FFFFFF 60%, rgba(255,255,255,0.6) 90%, rgba(255,255,255,0))",
-            transform: selected.length > 0 ? "translateY(0)" : "translateY(110%)",
+            position:"absolute", left:0, right:0,
+            bottom: `calc(74px + var(--safe-bot))`,
+            padding:"10px 16px 0",
+            transform: selected.length > 0 ? "translateY(0)" : "translateY(140%)",
             transition:"transform 0.28s cubic-bezier(0.32,0.72,0,1)",
             pointerEvents: selected.length > 0 ? "auto" : "none",
+            zIndex: 4,
           }}>
             <button onClick={handleConfirm}
-              style={{
-                width:"100%", padding:"15px 20px",
-                background:"var(--ink)", color:"#fff", border:"none", borderRadius:14,
-                cursor:"pointer", fontFamily:"var(--f-os)", fontSize:13, fontWeight:700,
-                letterSpacing:"0.16em", textTransform:"uppercase",
-                display:"flex", alignItems:"center", justifyContent:"center", gap:8,
-                boxShadow:"0 8px 22px rgba(0,0,0,0.18)",
-              }}>
+              style={{ width:"100%", padding:"15px 20px",
+                       background:"var(--ink)", color:"#fff", border:"none", borderRadius:14,
+                       cursor:"pointer", fontFamily:"var(--f-os)", fontSize:14, fontWeight:700,
+                       letterSpacing:"0.16em", textTransform:"uppercase",
+                       display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+                       boxShadow:"0 8px 22px rgba(0,0,0,0.18)" }}>
               Add {selected.length} exercise{selected.length !== 1 ? "s" : ""}
               <Icon name="ArrowRight" size={15} color="#fff" sw={2.2}/>
             </button>
           </div>
         )}
 
+        {/* Sticky bottom bar: search + filter button */}
+        <div className="cat-bottombar">
+          <input
+            type="search"
+            className="cat-search-input"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search name, muscle, equipment"
+            spellCheck={false}
+            autoComplete="off"
+          />
+          <button
+            onClick={() => setShowFilters(true)}
+            className={`cat-filter-btn ${activeFilterCount > 0 ? "has-filters" : ""}`}
+            aria-label="Filters">
+            <Icon name="SlidersHorizontal" size={20} color="#fff" sw={2.2}/>
+          </button>
+        </div>
+      </div>
+
+      {/* Filter sheet backdrop */}
+      <div className={`cat-filter-backdrop ${showFilters?"on":""}`} onClick={() => setShowFilters(false)}/>
+
+      {/* Filter sheet */}
+      <div className={`cat-filter-sheet ${showFilters?"on":""}`}>
+        <div style={{ flexShrink:0, paddingTop:10 }}>
+          <div style={{ width:36, height:5, background:"var(--ink4)", borderRadius:3, margin:"0 auto" }}/>
+        </div>
+        <div style={{ flexShrink:0, padding:"14px 20px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"1px solid var(--line)" }}>
+          <div style={{ fontFamily:"var(--f-os)", fontSize:22, fontWeight:700, textTransform:"uppercase", color:"var(--ink)", letterSpacing:"0.02em" }}>
+            Filters
+          </div>
+          <button onClick={clearFilters}
+            style={{ background:"none", border:"none", fontSize:14, color:"var(--ink2)", cursor:"pointer", padding:"6px 8px" }}>
+            Clear All
+          </button>
+        </div>
+        <div style={{ flex:1, minHeight:0, overflowY:"auto", padding:"16px 20px 0" }}>
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)", marginBottom:10 }}>
+              Muscle Group
+            </div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+              {CATALOG_BROAD_TABS.map(tab => (
+                <button key={tab}
+                  className={`cat-chip ${muscleFilter === tab ? "on" : ""}`}
+                  onClick={() => setMuscleFilter(muscleFilter === tab ? null : tab)}>
+                  {tab}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)", marginBottom:10 }}>
+              Equipment / Type
+            </div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+              {EQUIPMENT_GROUPS.filter(g => g.name !== "All").map(g => (
+                <button key={g.name}
+                  className={`cat-chip ${equipmentFilter === g.name ? "on" : ""}`}
+                  onClick={() => setEquipmentFilter(equipmentFilter === g.name ? null : g.name)}>
+                  {g.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.18em", textTransform:"uppercase", color:"var(--ink3)", marginBottom:10 }}>
+              Variation / Setup
+            </div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+              {setupOptions.map(s => (
+                <button key={s}
+                  className={`cat-chip ${setupFilter === s ? "on" : ""}`}
+                  onClick={() => setSetupFilter(setupFilter === s ? null : s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div style={{ flexShrink:0, padding:"12px 16px calc(14px + var(--safe-bot))", borderTop:"1px solid var(--line)" }}>
+          <button onClick={() => setShowFilters(false)}
+            style={{ width:"100%", padding:"15px 20px",
+                     background:"var(--ink)", color:"#fff", border:"none", borderRadius:14,
+                     cursor:"pointer", fontFamily:"var(--f-os)", fontSize:14, fontWeight:700,
+                     letterSpacing:"0.16em", textTransform:"uppercase" }}>
+            Done {activeFilterCount > 0 ? `(${activeFilterCount})` : ""}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -2946,6 +3112,8 @@ const WorkoutDetail = ({ open, workout, onClose, onStart, customNames = {}, setC
                                openCatalog({
                                  mode:"single",
                                  title:`Swap ${rit.item.ex.name}`,
+                                 subtitle:`Replacing ${rit.item.ex.name}`,
+                                 sourceItem: rit.item,
                                  excludeNames: items.filter(x => x.id !== rit.item.id).map(x => x.ex.name),
                                  workoutName: workoutName,
                                  onPick: (ce) => swapItem(rit.item.id, ce),
@@ -3426,6 +3594,8 @@ const App = () => {
         open={catalogState.open}
         mode={catalogState.mode}
         title={catalogState.title}
+        subtitle={catalogState.subtitle || ""}
+        sourceItem={catalogState.sourceItem || null}
         excludeNames={catalogState.excludeNames || []}
         workoutName={catalogState.workoutName || ""}
         onPick={catalogState.onPick}
